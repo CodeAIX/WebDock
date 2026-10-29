@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Darwin
 import Foundation
 
 func normalizeAccountEmail(_ value: String?) -> String? {
