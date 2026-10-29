@@ -149,7 +149,7 @@ struct SettingsView: View {
             Section("Privacy") {
                 Text("WebDock reads only browser profile metadata needed to match account names and emails. It does not read cookies, passwords, browsing history, or saved browser credentials.")
                     .foregroundStyle(.secondary)
-                Text("WebDAV passwords live in macOS Keychain. CloudKit is not used by WebDock.")
+                Text("WebDAV passwords live in macOS Keychain. WebDock uses no Apple cloud service entitlement.")
                     .foregroundStyle(.secondary)
             }
 
