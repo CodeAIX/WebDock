@@ -1,6 +1,7 @@
 import AppKit
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .popover
@@ -24,27 +25,66 @@ struct ShortcutTileView: View {
     let shortcut: WebShortcut
     let action: () -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.quaternary)
-                        .frame(width: 60, height: 60)
-                    Image(systemName: shortcut.sourceType == .chromeWebloc ? "globe.badge.chevron.backward" : "globe")
-                        .font(.system(size: 28, weight: .medium))
-                }
-                Text(shortcut.displayName)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.quaternary)
+                    .frame(width: 60, height: 60)
+                Image(systemName: shortcut.sourceType == .chromeWebloc ? "globe.badge.chevron.backward" : "globe")
+                    .font(.system(size: 28, weight: .medium))
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            Text(shortcut.displayName)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            isHovered ? Color.primary.opacity(0.06) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+        .onHover { isHovered = $0 }
         .help(shortcut.normalizedURLString)
+        .accessibilityElement(children: .combine)
         .accessibilityLabel("\(shortcut.displayName), \(URL(string: shortcut.normalizedURLString)?.host ?? shortcut.normalizedURLString)")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+private struct ShortcutReorderDropDelegate: DropDelegate {
+    let targetID: UUID
+    let canReorder: Bool
+    @Binding var draggedShortcutID: UUID?
+    let performMove: (UUID, UUID) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        canReorder && draggedShortcutID != nil && draggedShortcutID != targetID
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard validateDrop(info: info) else {
+            return DropProposal(operation: .cancel)
+        }
+        return DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard canReorder,
+              let sourceID = draggedShortcutID,
+              sourceID != targetID else {
+            draggedShortcutID = nil
+            return false
+        }
+
+        performMove(sourceID, targetID)
+        draggedShortcutID = nil
+        return true
     }
 }
 
@@ -55,6 +95,7 @@ struct LauncherView: View {
     @Query(sort: \WebShortcut.sortIndex) private var shortcuts: [WebShortcut]
     @State private var searchText = ""
     @State private var errorMessage: String?
+    @State private var draggedShortcutID: UUID?
 
     private var filtered: [WebShortcut] {
         guard !searchText.isEmpty else { return shortcuts }
@@ -104,10 +145,23 @@ struct LauncherView: View {
                                 ShortcutTileView(shortcut: shortcut) {
                                     launch(shortcut)
                                 }
-                                .draggable(shortcut.id.uuidString)
-                                .dropDestination(for: String.self) { items, _ in
-                                    handleDrop(items, onto: shortcut.id)
+                                .opacity(draggedShortcutID == shortcut.id ? 0.55 : 1)
+                                .onDrag {
+                                    guard searchText.isEmpty else {
+                                        return NSItemProvider()
+                                    }
+                                    draggedShortcutID = shortcut.id
+                                    return NSItemProvider(object: shortcut.id.uuidString as NSString)
                                 }
+                                .onDrop(
+                                    of: [UTType.plainText],
+                                    delegate: ShortcutReorderDropDelegate(
+                                        targetID: shortcut.id,
+                                        canReorder: searchText.isEmpty,
+                                        draggedShortcutID: $draggedShortcutID,
+                                        performMove: moveShortcut
+                                    )
+                                )
                             }
                         }
                         .padding(.vertical, 2)
@@ -144,23 +198,14 @@ struct LauncherView: View {
         }
     }
 
-    private func handleDrop(_ items: [String], onto targetID: UUID) -> Bool {
-        guard searchText.isEmpty,
-              let rawID = items.first,
-              let sourceID = UUID(uuidString: rawID),
-              sourceID != targetID else {
-            return false
-        }
-
+    private func moveShortcut(_ sourceID: UUID, onto targetID: UUID) {
         do {
             try environment.shortcutStore.moveForDrop(
                 shortcutID: sourceID,
                 onto: targetID
             )
-            return true
         } catch {
             errorMessage = error.localizedDescription
-            return false
         }
     }
 }
