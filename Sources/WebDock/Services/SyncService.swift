@@ -1,6 +1,7 @@
 import CloudKit
 import Combine
 import Foundation
+import Security
 import SwiftData
 
 extension Notification.Name {
@@ -16,6 +17,23 @@ enum SyncPreferences {
     static var providerKind: SyncProviderKind {
         let raw = UserDefaults.standard.string(forKey: providerKey)
         return raw.flatMap(SyncProviderKind.init(rawValue:)) ?? .off
+    }
+}
+
+enum CloudKitCapability {
+    static var isAvailable: Bool {
+        guard let task = SecTaskCreateFromSelf(nil),
+              let value = SecTaskCopyValueForEntitlement(
+                task,
+                "com.apple.developer.icloud-services" as CFString,
+                nil
+              ),
+              let services = value as? [String]
+        else {
+            return false
+        }
+
+        return services.contains("CloudKit") || services.contains("CloudKit-Anonymous")
     }
 }
 
@@ -260,7 +278,12 @@ final class SyncCoordinator {
             )
             return
         case .iCloud:
-            break
+            guard CloudKitCapability.isAvailable else {
+                SyncStatusCenter.shared.state = .unavailable(
+                    "iCloud sync requires an Apple-signed build with a provisioning profile that authorizes CloudKit."
+                )
+                return
+            }
         }
 
         isSyncing = true
