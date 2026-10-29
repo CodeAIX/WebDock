@@ -265,11 +265,14 @@ private struct ShortcutEditorView: View {
         do {
             try environment.shortcutStore.delete(shortcut)
             onDeleted()
+        } catch let storeError as ShortcutStoreError {
+            errorMessage = storeError.localizedDescription
+            if case .trashCleanupPending = storeError {
+                // Database deletion already committed; only Trash cleanup failed.
+                onDeleted()
+            }
         } catch {
-            // A Trash cleanup warning can happen after the database record was
-            // safely removed; surface the recovery path instead of hiding it.
             errorMessage = error.localizedDescription
-            onDeleted()
         }
     }
 
