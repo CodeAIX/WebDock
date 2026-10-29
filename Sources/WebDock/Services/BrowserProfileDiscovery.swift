@@ -1,11 +1,5 @@
 import Foundation
 
-enum BrowserProfileRoutingSupport: String, Codable, Hashable {
-    case none
-    case verifiedChromiumWebloc
-    case experimentalChromiumWebloc
-}
-
 struct BrowserProfileOption: Identifiable, Hashable {
     let browserBundleIdentifier: String
     let browserDisplayName: String
@@ -121,7 +115,7 @@ struct BrowserProfileDiscovery {
                     profileDirectory: profileDirectory,
                     localProfileName: string(entry["name"]),
                     accountDisplayName: accountDisplayName,
-                    accountEmail: string(entry["user_name"]),
+                    accountEmail: normalizeAccountEmail(string(entry["user_name"])),
                     routingSupport: browser.profileRoutingSupport
                 )
             )

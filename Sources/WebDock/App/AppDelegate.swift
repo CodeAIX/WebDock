@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             try bootstrapIfNeeded()
+            environment?.syncCoordinator.start()
             launcherVisibilityState.cancelPendingShow()
             launcherPanelController?.showNearDock()
         } catch {
@@ -45,78 +46,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyLauncherAction(action)
         servicePendingLauncherShowOnNextRunLoop()
         return false
-    }
-
-    /// LaunchServices may deliver files before applicationDidFinishLaunching
-    /// when a non-running app is opened by a document. Bootstrap defensively
-    /// here as well so a Dock/Finder cold-start delivery is never discarded.
-    func application(_ application: NSApplication, open urls: [URL]) {
-        do {
-            try bootstrapIfNeeded()
-        } catch {
-            presentFatalLaunchError(error)
-            return
-        }
-
-        guard let importCoordinator = environment?.importCoordinator else { return }
-
-        Task { @MainActor [weak self] in
-            var failures: [(url: URL, message: String)] = []
-            var cleanupWarnings: [(url: URL, message: String)] = []
-
-            for url in urls {
-                do {
-                    try await importCoordinator.importItem(url)
-                } catch let importError as ImportCoordinatorError {
-                    switch importError {
-                    case .sourceCleanupPending:
-                        cleanupWarnings.append((url, importError.localizedDescription))
-                    }
-                } catch {
-                    failures.append((url, error.localizedDescription))
-                }
-            }
-
-            self?.launcherVisibilityState.cancelPendingShow()
-            self?.launcherPanelController?.showNearDock()
-
-            guard !failures.isEmpty || !cleanupWarnings.isEmpty else { return }
-
-            let alert = NSAlert()
-            alert.alertStyle = failures.isEmpty ? .informational : .warning
-
-            if failures.isEmpty {
-                alert.messageText = cleanupWarnings.count == 1
-                    ? "Shortcut Added — Original File Kept"
-                    : "Shortcuts Added — Some Original Files Kept"
-            } else {
-                alert.messageText = failures.count == 1
-                    ? "Shortcut Could Not Be Added"
-                    : "Some Shortcuts Could Not Be Added"
-            }
-
-            var sections: [String] = []
-            if !failures.isEmpty {
-                let lines = failures.map { item in
-                    "• \(self?.displayName(for: item.url) ?? item.url.lastPathComponent): \(item.message)"
-                }
-                sections.append(lines.joined(separator: "\n"))
-            }
-            if !cleanupWarnings.isEmpty {
-                let lines = cleanupWarnings.map { item in
-                    "• \(self?.displayName(for: item.url) ?? item.url.lastPathComponent): imported successfully; the original file remains in place."
-                }
-                sections.append(lines.joined(separator: "\n"))
-            }
-
-            alert.informativeText = sections.joined(separator: "\n\n")
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-        }
-    }
-
-    private func displayName(for url: URL) -> String {
-        url.lastPathComponent.isEmpty ? url.absoluteString : url.lastPathComponent
     }
 
     private func servicePendingLauncherShowOnNextRunLoop() {
