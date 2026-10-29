@@ -81,8 +81,6 @@ final class ImportCoordinator {
             context.delete(shortcut)
             do {
                 try context.save()
-                transaction.rollbackManagedArtifacts()
-                throw sourceRemovalError
             } catch let rollbackError {
                 // If the database rollback itself fails, keep the verified
                 // managed copy. This may leave a duplicate source file, but
@@ -93,6 +91,9 @@ final class ImportCoordinator {
                     rollbackError: rollbackError
                 )
             }
+
+            transaction.rollbackManagedArtifacts()
+            throw sourceRemovalError
         }
     }
 }
