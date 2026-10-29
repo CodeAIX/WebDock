@@ -1,0 +1,71 @@
+name: WebDock
+
+options:
+  minimumXcodeGenVersion: 2.38.0
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+environmentVariableTestSchemes: {}
+
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "5.0"
+    CLANG_ENABLE_MODULES: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  WebDock:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/WebDock
+    info:
+      path: Config/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.codeaix.WebDock
+        PRODUCT_NAME: WebDock
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        COMBINE_HIDPI_IMAGES: YES
+
+  WebDockTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/WebDockTests
+        excludes:
+          - Fixtures
+      - path: Tests/WebDockTests/Fixtures
+        buildPhase: resources
+    dependencies:
+      - target: WebDock
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.codeaix.WebDockTests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+
+schemes:
+  WebDock:
+    build:
+      targets:
+        WebDock: all
+        WebDockTests:
+          - test
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - WebDockTests
+    archive:
+      config: Release

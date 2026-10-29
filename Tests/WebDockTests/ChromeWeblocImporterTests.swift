@@ -4,11 +4,15 @@ import XCTest
 final class ChromeWeblocImporterTests: XCTestCase {
     func testParsesURLAndChromeProfile() async throws {
         let importer = ChromeWeblocImporter()
+        let bundle = Bundle(for: Self.self)
         let fixture = try XCTUnwrap(
-            Bundle(for: Self.self).url(
+            bundle.url(
                 forResource: "ChatGPT_Profile12",
                 withExtension: "crwebloc",
                 subdirectory: "Fixtures"
+            ) ?? bundle.url(
+                forResource: "ChatGPT_Profile12",
+                withExtension: "crwebloc"
             )
         )
 

@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 protocol WorkspaceOpening {
-    @MainActor func open(_ url: URL) -> Bool
+    func open(_ url: URL) -> Bool
 }
 
 extension NSWorkspace: WorkspaceOpening {}
