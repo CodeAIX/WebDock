@@ -5,6 +5,9 @@ struct ImportedShortcutDraft: Sendable {
     let url: URL
     let sourceType: ShortcutSourceType
     let launchMode: ShortcutLaunchMode
+    let browserBundleIdentifier: String?
+    let browserDisplayName: String?
+    let browserProfileDirectory: String?
     let browserProfileHint: String?
     let sourceFileURL: URL?
 }
@@ -40,6 +43,10 @@ func validateWebURL(_ url: URL) throws -> URL {
     return url
 }
 
+/// Treats Chrome `.crwebloc` as an import format. The original file is no
+/// longer the canonical launch object for new imports: URL + Chrome profile are
+/// normalized into editable WebShortcut fields and the launch service can
+/// recreate the small routing plist when needed.
 struct ChromeWeblocImporter: ShortcutImporter {
     func canImport(_ url: URL) -> Bool {
         url.isFileURL && url.pathExtension.lowercased() == "crwebloc"
@@ -60,8 +67,11 @@ struct ChromeWeblocImporter: ShortcutImporter {
             throw ShortcutImportError.missingURL
         }
         try validateWebURL(target)
-        guard let profile = plist["CrProfile"] as? String,
-              !profile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let rawProfile = plist["CrProfile"] as? String else {
+            throw ShortcutImportError.missingChromeProfile
+        }
+        let profile = rawProfile.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !profile.isEmpty else {
             throw ShortcutImportError.missingChromeProfile
         }
 
@@ -69,7 +79,10 @@ struct ChromeWeblocImporter: ShortcutImporter {
             displayName: url.deletingPathExtension().lastPathComponent,
             url: target,
             sourceType: .chromeWebloc,
-            launchMode: .originalShortcutFile,
+            launchMode: .specifiedBrowser,
+            browserBundleIdentifier: "com.google.Chrome",
+            browserDisplayName: "Google Chrome",
+            browserProfileDirectory: profile,
             browserProfileHint: profile,
             sourceFileURL: url
         )
@@ -101,6 +114,9 @@ struct WeblocImporter: ShortcutImporter {
             url: target,
             sourceType: .webLoc,
             launchMode: .defaultBrowser,
+            browserBundleIdentifier: nil,
+            browserDisplayName: nil,
+            browserProfileDirectory: nil,
             browserProfileHint: nil,
             sourceFileURL: url
         )
@@ -135,6 +151,9 @@ struct InternetShortcutImporter: ShortcutImporter {
             url: target,
             sourceType: .internetShortcut,
             launchMode: .defaultBrowser,
+            browserBundleIdentifier: nil,
+            browserDisplayName: nil,
+            browserProfileDirectory: nil,
             browserProfileHint: nil,
             sourceFileURL: url
         )
@@ -160,6 +179,9 @@ struct URLImporter: ShortcutImporter {
             url: target,
             sourceType: .directURL,
             launchMode: .defaultBrowser,
+            browserBundleIdentifier: nil,
+            browserDisplayName: nil,
+            browserProfileDirectory: nil,
             browserProfileHint: nil,
             sourceFileURL: nil
         )
