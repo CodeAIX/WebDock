@@ -13,7 +13,15 @@ struct ManagedStorage {
             appropriateFor: nil,
             create: true
         )
-        rootURL = support.appendingPathComponent("WebDock", isDirectory: true)
+        try self.init(
+            rootURL: support.appendingPathComponent("WebDock", isDirectory: true),
+            fileManager: fileManager
+        )
+    }
+
+    /// Injectable root used by tests and future portable-profile features.
+    init(rootURL: URL, fileManager: FileManager = .default) throws {
+        self.rootURL = rootURL
         shortcutsURL = rootURL.appendingPathComponent("Shortcuts", isDirectory: true)
         cacheURL = rootURL.appendingPathComponent("Cache", isDirectory: true)
         stagingURL = rootURL.appendingPathComponent("Staging", isDirectory: true)
@@ -25,5 +33,16 @@ struct ManagedStorage {
 
     func directory(for id: UUID) -> URL {
         shortcutsURL.appendingPathComponent(id.uuidString, isDirectory: true)
+    }
+
+    func stagingDirectory(for id: UUID) -> URL {
+        stagingURL.appendingPathComponent(id.uuidString, isDirectory: true)
+    }
+
+    func relativePath(forManagedFile url: URL) -> String? {
+        let root = rootURL.standardizedFileURL.path
+        let file = url.standardizedFileURL.path
+        guard file.hasPrefix(root + "/") else { return nil }
+        return String(file.dropFirst(root.count + 1))
     }
 }
