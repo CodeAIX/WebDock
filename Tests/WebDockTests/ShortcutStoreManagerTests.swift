@@ -26,6 +26,37 @@ final class ShortcutStoreManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testAtomicMetadataPersistsSelectedBrowserProfileAccount() throws {
+        let fixture = try makeFixture()
+        let shortcut = makeShortcut(name: "ChatGPT", index: 0, sourceType: .directURL)
+        fixture.container.mainContext.insert(shortcut)
+        try fixture.container.mainContext.save()
+
+        try fixture.store.updateMetadata(
+            shortcut,
+            name: "ChatGPT Research",
+            normalizedURL: "https://chatgpt.com/",
+            browserBundleIdentifier: "com.google.Chrome",
+            browserDisplayName: "Google Chrome",
+            browserProfileDirectory: "Profile 12",
+            browserProfileDisplayName: "Research Account",
+            browserProfileAccountEmail: "research@example.com"
+        )
+
+        XCTAssertEqual(shortcut.launchMode, .specifiedBrowser)
+        XCTAssertEqual(shortcut.browserBundleIdentifier, "com.google.Chrome")
+        XCTAssertEqual(shortcut.browserProfileDirectory, "Profile 12")
+        XCTAssertEqual(shortcut.browserProfileDisplayName, "Research Account")
+        XCTAssertEqual(shortcut.browserProfileAccountEmail, "research@example.com")
+
+        try fixture.store.clearBrowserOverride(shortcut)
+        XCTAssertEqual(shortcut.launchMode, .defaultBrowser)
+        XCTAssertNil(shortcut.browserProfileDirectory)
+        XCTAssertNil(shortcut.browserProfileDisplayName)
+        XCTAssertNil(shortcut.browserProfileAccountEmail)
+    }
+
+    @MainActor
     func testAtomicMetadataValidationDoesNotPartiallyRenameOriginalShortcut() throws {
         let fixture = try makeFixture()
         let shortcut = makeShortcut(
