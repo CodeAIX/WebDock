@@ -39,9 +39,25 @@ final class SystemWorkspace: WorkspaceOpening {
 @MainActor
 final class ShortcutLauncher {
     private let workspace: any WorkspaceOpening
+    private let profileShortcutWriter: any BrowserProfileShortcutWriting
 
-    init(workspace: (any WorkspaceOpening)? = nil) {
+    private static let chromiumProfileCapableBundleIdentifiers: Set<String> = [
+        "com.google.Chrome",
+        "com.google.Chrome.beta",
+        "com.google.Chrome.dev",
+        "com.google.Chrome.canary",
+        "org.chromium.Chromium",
+        "com.microsoft.edgemac",
+        "com.brave.Browser",
+        "com.vivaldi.Vivaldi"
+    ]
+
+    init(
+        workspace: (any WorkspaceOpening)? = nil,
+        profileShortcutWriter: (any BrowserProfileShortcutWriting)? = nil
+    ) {
         self.workspace = workspace ?? SystemWorkspace()
+        self.profileShortcutWriter = profileShortcutWriter ?? ChromiumProfileShortcutWriter()
     }
 
     func launch(_ shortcut: WebShortcut, storageRoot: URL) throws {
@@ -77,7 +93,26 @@ final class ShortcutLauncher {
             ) else {
                 throw ShortcutLaunchError.browserNotInstalled(bundleIdentifier)
             }
-            workspace.open(url, withApplicationAt: applicationURL)
+
+            if let profileDirectory = normalizedProfileDirectory(shortcut.browserProfileDirectory) {
+                guard Self.chromiumProfileCapableBundleIdentifiers.contains(bundleIdentifier) else {
+                    throw ShortcutLaunchError.profileRoutingNotSupported(bundleIdentifier)
+                }
+                let profileShortcut: URL
+                do {
+                    profileShortcut = try profileShortcutWriter.writeShortcut(
+                        targetURL: url,
+                        profileDirectory: profileDirectory,
+                        shortcutID: shortcut.id,
+                        storageRoot: storageRoot
+                    )
+                } catch {
+                    throw ShortcutLaunchError.profileShortcutCreationFailed
+                }
+                workspace.open(profileShortcut, withApplicationAt: applicationURL)
+            } else {
+                workspace.open(url, withApplicationAt: applicationURL)
+            }
 
         case .externalAppBundle:
             // Explicitly deferred to Milestone 9. Keeping this as an error is
@@ -94,6 +129,12 @@ final class ShortcutLauncher {
         }
         return url
     }
+
+    private func normalizedProfileDirectory(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
 
 enum ShortcutLaunchError: LocalizedError, Equatable {
@@ -102,6 +143,8 @@ enum ShortcutLaunchError: LocalizedError, Equatable {
     case missingManagedShortcut
     case missingBrowserIdentifier
     case browserNotInstalled(String)
+    case profileRoutingNotSupported(String)
+    case profileShortcutCreationFailed
     case externalAppNotSupported
     case openFailed
 
@@ -117,6 +160,10 @@ enum ShortcutLaunchError: LocalizedError, Equatable {
             "No browser is configured for this shortcut."
         case .browserNotInstalled(let bundleIdentifier):
             "The selected browser is not installed: \(bundleIdentifier)."
+        case .profileRoutingNotSupported(let bundleIdentifier):
+            "Profile-specific launching is not supported for this browser: \(bundleIdentifier)."
+        case .profileShortcutCreationFailed:
+            "WebDock could not prepare the browser profile shortcut."
         case .externalAppNotSupported:
             "External app shortcuts are not enabled in WebDock v0.1."
         case .openFailed:
