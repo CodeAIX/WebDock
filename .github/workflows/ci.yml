@@ -30,6 +30,12 @@ jobs:
             echo "project.yml is not on this ref yet; CI bootstrap check only."
           fi
 
+      - name: Validate LaunchServices declarations
+        if: steps.project.outputs.available == 'true'
+        run: |
+          plutil -lint Config/Info.plist
+          python3 scripts/validate_document_types.py
+
       - name: Select Xcode
         if: steps.project.outputs.available == 'true'
         run: |
