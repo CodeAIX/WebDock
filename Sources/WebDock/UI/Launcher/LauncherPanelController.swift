@@ -27,8 +27,6 @@ final class LauncherPanelController: NSWindowController {
         panel.hasShadow = true
         panel.isFloatingPanel = true
 
-        // AppDelegate is the sole owner of visibility and activation timing.
-        // The panel must not independently hide or activate the application.
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .transient]
 
@@ -36,7 +34,6 @@ final class LauncherPanelController: NSWindowController {
             environment: environment,
             onOpenManager: onOpenManager
         )
-        .modelContainer(environment.modelContainer)
         panel.contentView = NSHostingView(rootView: root)
 
         super.init(window: panel)
