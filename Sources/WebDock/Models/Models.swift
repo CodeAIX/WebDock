@@ -40,6 +40,9 @@ final class WebShortcut {
     var launchModeRaw: String
     var browserBundleIdentifier: String?
     var browserDisplayName: String?
+    var browserProfileDirectory: String?
+    var browserProfileDisplayName: String?
+    var browserProfileAccountEmail: String?
     var browserProfileHint: String?
     var managedFileRelativePath: String?
     var externalAppBookmarkData: Data?

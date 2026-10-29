@@ -59,7 +59,10 @@ final class ShortcutStore {
     func setBrowserOverride(
         _ shortcut: WebShortcut,
         bundleIdentifier: String,
-        displayName: String
+        displayName: String,
+        profileDirectory: String? = nil,
+        profileDisplayName: String? = nil,
+        profileAccountEmail: String? = nil
     ) throws {
         guard shortcut.launchMode != .originalShortcutFile else {
             throw ShortcutStoreError.originalShortcutIsReadOnly
@@ -68,9 +71,17 @@ final class ShortcutStore {
             bundleIdentifier: bundleIdentifier,
             displayName: displayName
         )
+        let profile = try validatedBrowserProfile(
+            directory: profileDirectory,
+            displayName: profileDisplayName,
+            accountEmail: profileAccountEmail
+        )
 
         shortcut.browserBundleIdentifier = browser.bundleIdentifier
         shortcut.browserDisplayName = browser.displayName
+        shortcut.browserProfileDirectory = profile?.directory
+        shortcut.browserProfileDisplayName = profile?.displayName
+        shortcut.browserProfileAccountEmail = profile?.accountEmail
         shortcut.launchMode = .specifiedBrowser
         shortcut.updatedAt = Date()
         try saveOrRollback()
@@ -83,6 +94,9 @@ final class ShortcutStore {
 
         shortcut.browserBundleIdentifier = nil
         shortcut.browserDisplayName = nil
+        shortcut.browserProfileDirectory = nil
+        shortcut.browserProfileDisplayName = nil
+        shortcut.browserProfileAccountEmail = nil
         shortcut.launchMode = .defaultBrowser
         shortcut.updatedAt = Date()
         try saveOrRollback()
@@ -95,12 +109,16 @@ final class ShortcutStore {
         name proposedName: String,
         normalizedURL rawURL: String,
         browserBundleIdentifier: String?,
-        browserDisplayName: String?
+        browserDisplayName: String?,
+        browserProfileDirectory: String? = nil,
+        browserProfileDisplayName: String? = nil,
+        browserProfileAccountEmail: String? = nil
     ) throws {
         let name = try validatedName(proposedName)
 
         if shortcut.launchMode == .originalShortcutFile {
             guard browserBundleIdentifier == nil,
+                  browserProfileDirectory == nil,
                   rawURL.trimmingCharacters(in: .whitespacesAndNewlines) == shortcut.normalizedURLString else {
                 throw ShortcutStoreError.originalShortcutIsReadOnly
             }
@@ -112,19 +130,29 @@ final class ShortcutStore {
 
         let url = try validatedURL(rawURL)
         let browser: (bundleIdentifier: String, displayName: String)?
+        let profile: (directory: String, displayName: String?, accountEmail: String?)?
         if let browserBundleIdentifier {
             browser = try validatedBrowser(
                 bundleIdentifier: browserBundleIdentifier,
                 displayName: browserDisplayName ?? browserBundleIdentifier
             )
+            profile = try validatedBrowserProfile(
+                directory: browserProfileDirectory,
+                displayName: browserProfileDisplayName,
+                accountEmail: browserProfileAccountEmail
+            )
         } else {
             browser = nil
+            profile = nil
         }
 
         shortcut.displayName = name
         shortcut.normalizedURLString = url.absoluteString
         shortcut.browserBundleIdentifier = browser?.bundleIdentifier
         shortcut.browserDisplayName = browser?.displayName
+        shortcut.browserProfileDirectory = profile?.directory
+        shortcut.browserProfileDisplayName = profile?.displayName
+        shortcut.browserProfileAccountEmail = profile?.accountEmail
         shortcut.launchMode = browser == nil ? .defaultBrowser : .specifiedBrowser
         shortcut.updatedAt = Date()
         try saveOrRollback()
@@ -259,6 +287,34 @@ final class ShortcutStore {
         return (bundleIdentifier, displayName.isEmpty ? bundleIdentifier : displayName)
     }
 
+    private func validatedBrowserProfile(
+        directory: String?,
+        displayName: String?,
+        accountEmail: String?
+    ) throws -> (directory: String, displayName: String?, accountEmail: String?)? {
+        guard let directory else { return nil }
+        let trimmed = directory.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              trimmed != ".",
+              trimmed != "..",
+              !trimmed.contains("/"),
+              !trimmed.contains("\\"),
+              !trimmed.contains("\0") else {
+            throw ShortcutStoreError.invalidBrowserProfile
+        }
+        return (
+            trimmed,
+            normalizedOptionalText(displayName),
+            normalizedOptionalText(accountEmail)
+        )
+    }
+
+    private func normalizedOptionalText(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private func orderedShortcuts() throws -> [WebShortcut] {
         try modelContainer.mainContext.fetch(
             FetchDescriptor<WebShortcut>(sortBy: [SortDescriptor(\WebShortcut.sortIndex)])
@@ -289,6 +345,7 @@ enum ShortcutStoreError: LocalizedError {
     case invalidURL
     case originalShortcutIsReadOnly
     case missingBrowserIdentifier
+    case invalidBrowserProfile
     case shortcutNotFound
     case managedSourceMissing
     case deletionStagingAlreadyExists(URL)
@@ -305,6 +362,8 @@ enum ShortcutStoreError: LocalizedError {
             "This shortcut preserves its original browser/profile behavior, so its URL and browser cannot be overridden."
         case .missingBrowserIdentifier:
             "The selected browser does not have a valid bundle identifier."
+        case .invalidBrowserProfile:
+            "The selected browser profile is not valid."
         case .shortcutNotFound:
             "The shortcut could not be found."
         case .managedSourceMissing:
