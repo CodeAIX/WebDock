@@ -67,6 +67,11 @@ final class BackupService {
     }
 
     @discardableResult
+    func createManualSnapshot() throws -> URL {
+        try createLocalSnapshot(prefix: "Manual", date: Date())
+    }
+
+    @discardableResult
     func createPreRestoreSnapshot() throws -> URL {
         try createLocalSnapshot(prefix: "Pre-Restore", date: Date())
     }
