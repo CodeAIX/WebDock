@@ -200,3 +200,7 @@ enters another tile, and ignores stale asynchronous payload callbacks. A local r
 ChatGPT after Google; Canonical.json recorded the resulting order and a real restart preserved it. Cancelled drags retain the
 last live order; reordering back reverses it. External text is not accepted as a shortcut import.
 Ventura drag behavior and repeated restart acceptance remain in the device checklist.
+
+Final combined XMAC checks also verified native Button tile arrow focus with live drag reorder,
+Compact density + hidden subtitle + hidden browser badge (then restored defaults), and Delete
+confirmation with Cancel. The diagnostic app was closed after validation.

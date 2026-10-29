@@ -35,7 +35,8 @@ struct ShortcutTileView: View {
     @State private var isHovered = false
 
     var body: some View {
-        VStack(spacing: 8) {
+        Button(action: action) {
+          VStack(spacing: 8) {
             WebsiteIconView(shortcut: shortcut, resolution: resolution, service: iconService,
                             size: (GridDensity(rawValue: densityRaw) ?? .standard).iconSize,
                             showBrowser: showBrowserBadge, showWarning: showWarningBadge)
@@ -56,8 +57,8 @@ struct ShortcutTileView: View {
         )
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
         .contentShape(Rectangle())
-        .onTapGesture(perform: action)
-        .accessibilityAction { action() }
+          }
+        .buttonStyle(.plain)
         .scaleEffect(isHovered && !reduceMotion ? 1.025 : 1)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isHovered)
         .onHover { isHovered = $0 }
