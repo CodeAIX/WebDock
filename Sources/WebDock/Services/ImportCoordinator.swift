@@ -13,18 +13,52 @@ final class ImportCoordinator {
         self.importers = [
             ChromeWeblocImporter(),
             WeblocImporter(),
-            InternetShortcutImporter()
+            InternetShortcutImporter(),
+            URLImporter()
         ]
     }
 
-    func importFile(_ sourceURL: URL) async throws {
-        guard let importer = importers.first(where: { $0.canImport(sourceURL) }) else {
+    /// Imports either a managed shortcut file or a direct HTTP(S) URL.
+    /// File-backed inputs use the full source-preserving transaction. Direct
+    /// URLs have no user-owned source file and only require a database commit.
+    func importItem(_ inputURL: URL) async throws {
+        guard let importer = importers.first(where: { $0.canImport(inputURL) }) else {
             throw ShortcutImportError.unsupported
         }
 
-        // Inspect before touching the source. Unsupported, malformed, or unsafe
-        // shortcuts therefore leave the user's file completely untouched.
-        let originalDraft = try await importer.inspect(sourceURL)
+        let originalDraft = try await importer.inspect(inputURL)
+        if originalDraft.sourceFileURL == nil {
+            try persistDirectDraft(originalDraft)
+            return
+        }
+
+        try await importFileDraft(originalDraft, sourceURL: inputURL, using: importer)
+    }
+
+    /// Compatibility entry point for existing callers. Despite the historical
+    /// name it also accepts direct HTTP(S) URLs; new code should use importItem.
+    func importFile(_ sourceURL: URL) async throws {
+        try await importItem(sourceURL)
+    }
+
+    private func persistDirectDraft(_ draft: ImportedShortcutDraft) throws {
+        let context = modelContainer.mainContext
+        let shortcut = makeShortcut(from: draft, id: UUID())
+
+        do {
+            context.insert(shortcut)
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    private func importFileDraft(
+        _ originalDraft: ImportedShortcutDraft,
+        sourceURL: URL,
+        using importer: any ShortcutImporter
+    ) async throws {
         let id = UUID()
         var transaction = ImportTransaction(
             id: id,
@@ -54,15 +88,7 @@ final class ImportCoordinator {
                 throw ImportCoordinatorError.invalidManagedPath
             }
 
-            shortcut = WebShortcut(
-                id: id,
-                displayName: originalDraft.displayName,
-                normalizedURLString: originalDraft.url.absoluteString,
-                sourceType: originalDraft.sourceType,
-                launchMode: originalDraft.launchMode,
-                sortIndex: Date().timeIntervalSince1970
-            )
-            shortcut.browserProfileHint = originalDraft.browserProfileHint
+            shortcut = makeShortcut(from: originalDraft, id: id)
             shortcut.managedFileRelativePath = relativePath
 
             context.insert(shortcut)
@@ -95,6 +121,19 @@ final class ImportCoordinator {
             transaction.rollbackManagedArtifacts()
             throw sourceRemovalError
         }
+    }
+
+    private func makeShortcut(from draft: ImportedShortcutDraft, id: UUID) -> WebShortcut {
+        let shortcut = WebShortcut(
+            id: id,
+            displayName: draft.displayName,
+            normalizedURLString: draft.url.absoluteString,
+            sourceType: draft.sourceType,
+            launchMode: draft.launchMode,
+            sortIndex: Date().timeIntervalSince1970
+        )
+        shortcut.browserProfileHint = draft.browserProfileHint
+        return shortcut
     }
 }
 
