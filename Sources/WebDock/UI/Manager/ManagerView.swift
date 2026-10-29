@@ -82,6 +82,7 @@ private struct ManagerShortcutRow: View {
 
 private struct ShortcutEditorView: View {
     private static let defaultBrowserToken = "__WEBDOCK_DEFAULT_BROWSER__"
+    private static let defaultProfileToken = "__WEBDOCK_DEFAULT_PROFILE__"
 
     let shortcut: WebShortcut
     let environment: AppEnvironment
@@ -90,6 +91,7 @@ private struct ShortcutEditorView: View {
     @State private var name: String
     @State private var urlString: String
     @State private var browserSelection: String
+    @State private var browserProfileSelection: String
     @State private var errorMessage: String?
     @State private var showDeleteConfirmation = false
     @State private var didSave = false
@@ -106,6 +108,9 @@ private struct ShortcutEditorView: View {
         _urlString = State(initialValue: shortcut.normalizedURLString)
         _browserSelection = State(
             initialValue: shortcut.browserBundleIdentifier ?? Self.defaultBrowserToken
+        )
+        _browserProfileSelection = State(
+            initialValue: shortcut.browserProfileDirectory ?? Self.defaultProfileToken
         )
     }
 
@@ -127,6 +132,36 @@ private struct ShortcutEditorView: View {
         return options
     }
 
+    private var selectedBrowser: BrowserOption? {
+        browserOptions.first(where: { $0.bundleIdentifier == browserSelection })
+    }
+
+    private var profileOptions: [BrowserProfileOption] {
+        guard let selectedBrowser, selectedBrowser.supportsProfiles else { return [] }
+        var options = environment.browserCatalog.profiles(for: selectedBrowser)
+
+        if browserSelection == shortcut.browserBundleIdentifier,
+           let storedDirectory = shortcut.browserProfileDirectory,
+           !options.contains(where: { $0.profileDirectory == storedDirectory }) {
+            options.append(
+                BrowserProfileOption(
+                    browserBundleIdentifier: selectedBrowser.bundleIdentifier,
+                    browserDisplayName: selectedBrowser.displayName,
+                    profileDirectory: storedDirectory,
+                    localProfileName: shortcut.browserProfileDisplayName,
+                    accountDisplayName: shortcut.browserProfileDisplayName,
+                    accountEmail: shortcut.browserProfileAccountEmail,
+                    routingSupport: selectedBrowser.profileRoutingSupport
+                )
+            )
+        }
+        return options
+    }
+
+    private var selectedProfile: BrowserProfileOption? {
+        profileOptions.first(where: { $0.profileDirectory == browserProfileSelection })
+    }
+
     var body: some View {
         Form {
             Section("Shortcut") {
@@ -146,13 +181,16 @@ private struct ShortcutEditorView: View {
             Section("Open With") {
                 if isOriginalBrowserShortcut {
                     LabeledContent("Mode") {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Original browser shortcut")
-                            if let profile = shortcut.browserProfileHint, !profile.isEmpty {
-                                Text(profile)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                        Text("Original browser shortcut")
+                    }
+                    if let profile = shortcut.browserProfileHint, !profile.isEmpty {
+                        LabeledContent("Profile / Account") {
+                            Text(
+                                environment.browserCatalog.displayLabelForImportedChromeProfile(profile)
+                                    ?? profile
+                            )
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                         }
                     }
                     Text("WebDock preserves this shortcut file so its browser profile behavior is not changed.")
@@ -165,6 +203,31 @@ private struct ShortcutEditorView: View {
                         ForEach(browserOptions) { browser in
                             Text(browser.displayName)
                                 .tag(browser.bundleIdentifier)
+                        }
+                    }
+
+                    if let selectedBrowser, selectedBrowser.supportsProfiles {
+                        Picker("Profile / Account", selection: $browserProfileSelection) {
+                            Text("Browser Default / Last Used")
+                                .tag(Self.defaultProfileToken)
+                            ForEach(profileOptions) { profile in
+                                Text(profile.displayLabel)
+                                    .tag(profile.profileDirectory)
+                            }
+                        }
+
+                        if profileOptions.isEmpty {
+                            Text("No local profiles were found for this browser. WebDock reads only the browser's local profile metadata.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else if selectedBrowser.profileRoutingSupport == .experimentalChromiumWebloc {
+                            Text("Account names are read locally. Profile-specific launching for this Chromium-based browser is experimental; Google Chrome and Chromium are the verified paths.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Account/profile names are read locally from the browser's profile metadata. Cookies and passwords are not accessed.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -211,6 +274,12 @@ private struct ShortcutEditorView: View {
         .formStyle(.grouped)
         .padding(12)
         .navigationTitle(shortcut.displayName)
+        .onChange(of: browserSelection) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            if newValue != shortcut.browserBundleIdentifier {
+                browserProfileSelection = Self.defaultProfileToken
+            }
+        }
         .confirmationDialog(
             "Delete “\(shortcut.displayName)”?",
             isPresented: $showDeleteConfirmation,
@@ -241,6 +310,10 @@ private struct ShortcutEditorView: View {
             let selectedBrowser = browserOptions.first(where: {
                 $0.bundleIdentifier == browserSelection
             })
+            let profile = browserProfileSelection == Self.defaultProfileToken
+                ? nil
+                : selectedProfile
+
             try environment.shortcutStore.updateMetadata(
                 shortcut,
                 name: name,
@@ -248,10 +321,14 @@ private struct ShortcutEditorView: View {
                 browserBundleIdentifier: isOriginalBrowserShortcut || browserSelection == Self.defaultBrowserToken
                     ? nil
                     : browserSelection,
-                browserDisplayName: selectedBrowser?.displayName
+                browserDisplayName: selectedBrowser?.displayName,
+                browserProfileDirectory: profile?.profileDirectory,
+                browserProfileDisplayName: profile?.accountDisplayName ?? profile?.localProfileName,
+                browserProfileAccountEmail: profile?.accountEmail
             )
             name = shortcut.displayName
             urlString = shortcut.normalizedURLString
+            browserProfileSelection = shortcut.browserProfileDirectory ?? Self.defaultProfileToken
             didSave = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                 didSave = false
