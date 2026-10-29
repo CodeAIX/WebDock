@@ -118,7 +118,7 @@ struct InternetShortcutImporter: ShortcutImporter {
             ?? String(data: data, encoding: .unicode)
         guard let text else { throw ShortcutImportError.malformedFile }
 
-        guard let line = text.split(whereSeparator: \ .isNewline)
+        guard let line = text.split(whereSeparator: \.isNewline)
             .map(String.init)
             .first(where: { $0.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("url=") }),
               let equals = line.firstIndex(of: "=") else {
