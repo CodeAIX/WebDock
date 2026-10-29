@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var environment: AppEnvironment?
     private var launcherPanelController: LauncherPanelController?
     private var managerWindowController: ManagerWindowController?
+    private var launcherVisibilityState = LauncherVisibilityState()
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         do {
@@ -17,17 +18,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             try bootstrapIfNeeded()
+            launcherVisibilityState.cancelPendingShow()
             launcherPanelController?.showNearDock()
         } catch {
             presentFatalLaunchError(error)
         }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        servicePendingLauncherShowOnNextRunLoop()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        applyLauncherAction(launcherVisibilityState.handleDidResignActive())
+    }
+
     func applicationShouldHandleReopen(
         _ sender: NSApplication,
         hasVisibleWindows flag: Bool
     ) -> Bool {
-        launcherPanelController?.toggleNearDock()
+        guard let launcherPanelController else { return false }
+
+        let action = launcherVisibilityState.handleDockReopen(
+            isLauncherVisible: launcherPanelController.isVisible
+        )
+        applyLauncherAction(action)
+
+        // Never synchronously show a hidden launcher from the Dock reopen
+        // callback. The app may still be crossing an activation boundary, and
+        // a late resign event from the previous cycle can otherwise hide a
+        // freshly shown panel. Service the pending show on the next run-loop
+        // turn, and only while NSApp is truly active.
+        servicePendingLauncherShowOnNextRunLoop()
         return false
     }
 
@@ -55,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
+            self?.launcherVisibilityState.cancelPendingShow()
             self?.launcherPanelController?.showNearDock()
 
             guard !failures.isEmpty else { return }
@@ -75,6 +98,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func servicePendingLauncherShowOnNextRunLoop() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard self.launcherVisibilityState.consumePendingShowIfActive(NSApp.isActive) else {
+                return
+            }
+            self.launcherPanelController?.showNearDock()
+        }
+    }
+
+    private func applyLauncherAction(_ action: LauncherVisibilityState.Action) {
+        switch action {
+        case .none:
+            break
+        case .hide:
+            launcherPanelController?.hide()
+        }
+    }
+
     private func bootstrapIfNeeded() throws {
         guard environment == nil else { return }
 
@@ -87,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcherPanelController = LauncherPanelController(
             environment: environment,
             onOpenManager: { [weak self] in
+                self?.launcherVisibilityState.cancelPendingShow()
                 self?.launcherPanelController?.hide()
                 self?.managerWindowController?.showManager()
             }
