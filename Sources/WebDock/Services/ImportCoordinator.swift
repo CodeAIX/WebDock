@@ -6,10 +6,16 @@ final class ImportCoordinator {
     private let modelContainer: ModelContainer
     private let managedStorage: ManagedStorage
     private let importers: [any ShortcutImporter]
+    private let fileTrasher: any FileTrashing
 
-    init(modelContainer: ModelContainer, managedStorage: ManagedStorage) {
+    init(
+        modelContainer: ModelContainer,
+        managedStorage: ManagedStorage,
+        fileTrasher: (any FileTrashing)? = nil
+    ) {
         self.modelContainer = modelContainer
         self.managedStorage = managedStorage
+        self.fileTrasher = fileTrasher ?? SystemFileTrasher()
         self.importers = [
             ChromeWeblocImporter(),
             WeblocImporter(),
@@ -18,109 +24,42 @@ final class ImportCoordinator {
         ]
     }
 
-    /// Imports either a managed shortcut file or a direct HTTP(S) URL.
-    /// File-backed inputs use the full source-preserving transaction. Direct
-    /// URLs have no user-owned source file and only require a database commit.
+    /// Imports all website shortcut formats into the same canonical WebShortcut
+    /// representation. File inputs are parse-only sources: after the database
+    /// commit succeeds they are moved to the macOS Trash and are never required
+    /// again for launching.
     func importItem(_ inputURL: URL) async throws {
         guard let importer = importers.first(where: { $0.canImport(inputURL) }) else {
             throw ShortcutImportError.unsupported
         }
 
-        let originalDraft = try await importer.inspect(inputURL)
-        if originalDraft.sourceFileURL == nil {
-            try persistDirectDraft(originalDraft)
-            return
+        let draft = try await importer.inspect(inputURL)
+        let shortcut = makeShortcut(from: draft, id: UUID())
+        let context = modelContainer.mainContext
+
+        do {
+            context.insert(shortcut)
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
         }
 
-        try await importFileDraft(originalDraft, sourceURL: inputURL, using: importer)
+        guard let sourceURL = draft.sourceFileURL else { return }
+
+        do {
+            try fileTrasher.trashItem(at: sourceURL)
+        } catch {
+            // The normalized database record is already valid and does not
+            // depend on the source file. Keep both rather than rolling back a
+            // successful import or risking source loss.
+            throw ImportCoordinatorError.sourceCleanupPending(sourceURL)
+        }
     }
 
-    /// Compatibility entry point for existing callers. Despite the historical
-    /// name it also accepts direct HTTP(S) URLs; new code should use importItem.
+    /// Compatibility entry point for existing callers.
     func importFile(_ sourceURL: URL) async throws {
         try await importItem(sourceURL)
-    }
-
-    private func persistDirectDraft(_ draft: ImportedShortcutDraft) throws {
-        let context = modelContainer.mainContext
-        let shortcut = makeShortcut(from: draft, id: UUID())
-
-        do {
-            context.insert(shortcut)
-            try context.save()
-        } catch {
-            context.rollback()
-            throw error
-        }
-    }
-
-    private func importFileDraft(
-        _ originalDraft: ImportedShortcutDraft,
-        sourceURL: URL,
-        using importer: any ShortcutImporter
-    ) async throws {
-        let id = UUID()
-        var transaction = ImportTransaction(
-            id: id,
-            sourceURL: sourceURL,
-            managedStorage: managedStorage
-        )
-
-        let context = modelContainer.mainContext
-        let shortcut: WebShortcut
-
-        // Phase 1: create and verify WebDock-owned state while preserving source.
-        do {
-            let stagedURL = try transaction.stage()
-
-            // Parse the staged copy as a second verification that the managed
-            // bytes remain a valid shortcut, not merely byte-identical data.
-            let stagedDraft = try await importer.inspect(stagedURL)
-            guard stagedDraft.url == originalDraft.url,
-                  stagedDraft.sourceType == originalDraft.sourceType,
-                  stagedDraft.launchMode == originalDraft.launchMode,
-                  stagedDraft.browserProfileHint == originalDraft.browserProfileHint else {
-                throw ImportCoordinatorError.stagedMetadataMismatch
-            }
-
-            let installedURL = try transaction.install()
-            guard let relativePath = managedStorage.relativePath(forManagedFile: installedURL) else {
-                throw ImportCoordinatorError.invalidManagedPath
-            }
-
-            shortcut = makeShortcut(from: originalDraft, id: id)
-            shortcut.managedFileRelativePath = relativePath
-
-            context.insert(shortcut)
-            try context.save()
-        } catch {
-            context.rollback()
-            transaction.rollbackManagedArtifacts()
-            throw error
-        }
-
-        // Phase 2: consume the original only after file + database commit.
-        do {
-            try transaction.consumeSource()
-        } catch let sourceRemovalError {
-            // Source still exists here. Prefer reverting the WebDock import.
-            context.delete(shortcut)
-            do {
-                try context.save()
-            } catch let rollbackError {
-                // If the database rollback itself fails, keep the verified
-                // managed copy. This may leave a duplicate source file, but
-                // never a database record pointing to a deleted managed file.
-                context.rollback()
-                throw ImportCoordinatorError.databaseRollbackFailed(
-                    importError: sourceRemovalError,
-                    rollbackError: rollbackError
-                )
-            }
-
-            transaction.rollbackManagedArtifacts()
-            throw sourceRemovalError
-        }
     }
 
     private func makeShortcut(from draft: ImportedShortcutDraft, id: UUID) -> WebShortcut {
@@ -132,24 +71,25 @@ final class ImportCoordinator {
             launchMode: draft.launchMode,
             sortIndex: Date().timeIntervalSince1970
         )
+        shortcut.browserBundleIdentifier = draft.browserBundleIdentifier
+        shortcut.browserDisplayName = draft.browserDisplayName
+        shortcut.browserProfileDirectory = draft.browserProfileDirectory
         shortcut.browserProfileHint = draft.browserProfileHint
+
+        // New normalized imports intentionally do not retain a managed source
+        // file. managedStorage remains injected for legacy records/migrations.
+        shortcut.managedFileRelativePath = nil
         return shortcut
     }
 }
 
 enum ImportCoordinatorError: LocalizedError {
-    case stagedMetadataMismatch
-    case invalidManagedPath
-    case databaseRollbackFailed(importError: Error, rollbackError: Error)
+    case sourceCleanupPending(URL)
 
     var errorDescription: String? {
         switch self {
-        case .stagedMetadataMismatch:
-            "The staged shortcut metadata did not match the original."
-        case .invalidManagedPath:
-            "The shortcut could not be represented inside WebDock managed storage."
-        case .databaseRollbackFailed:
-            "WebDock could not roll back its database after an import failure. The original and managed copy were both preserved."
+        case .sourceCleanupPending(let url):
+            "The shortcut was imported successfully, but the original file could not be moved to Trash: \(url.path)"
         }
     }
 }

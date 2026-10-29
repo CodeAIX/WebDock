@@ -6,6 +6,7 @@ struct ManagerView: View {
 
     @Query(sort: \WebShortcut.sortIndex) private var shortcuts: [WebShortcut]
     @State private var selectedID: UUID?
+    @State private var showNewShortcutSheet = false
 
     private var selectedShortcut: WebShortcut? {
         guard let selectedID else { return nil }
@@ -38,6 +39,21 @@ struct ManagerView: View {
                     systemImage: "globe",
                     description: Text("Choose a website shortcut to edit its settings.")
                 )
+            }
+        }
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    showNewShortcutSheet = true
+                } label: {
+                    Label("New Shortcut", systemImage: "plus")
+                }
+                .help("New Shortcut")
+            }
+        }
+        .sheet(isPresented: $showNewShortcutSheet) {
+            NewShortcutSheet(environment: environment) { shortcut in
+                selectedID = shortcut.id
             }
         }
         .onAppear {
@@ -181,7 +197,7 @@ private struct ShortcutEditorView: View {
             Section("Open With") {
                 if isOriginalBrowserShortcut {
                     LabeledContent("Mode") {
-                        Text("Original browser shortcut")
+                        Text("Legacy original browser shortcut")
                     }
                     if let profile = shortcut.browserProfileHint, !profile.isEmpty {
                         LabeledContent("Profile / Account") {
@@ -193,7 +209,7 @@ private struct ShortcutEditorView: View {
                             .textSelection(.enabled)
                         }
                     }
-                    Text("WebDock preserves this shortcut file so its browser profile behavior is not changed.")
+                    Text("This is a legacy source-preserving item. New imports are normalized into editable URL/browser/profile rules.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -233,9 +249,9 @@ private struct ShortcutEditorView: View {
                 }
             }
 
-            Section("Managed File") {
+            Section("Storage") {
                 if let managedURL = environment.shortcutStore.managedSourceURL(for: shortcut) {
-                    LabeledContent("Source") {
+                    LabeledContent("Legacy Source") {
                         Text(managedURL.lastPathComponent)
                             .foregroundStyle(.secondary)
                     }
@@ -245,7 +261,7 @@ private struct ShortcutEditorView: View {
                         }
                     }
                 } else {
-                    Text("This shortcut is stored as a normalized URL and has no managed source file.")
+                    Text("This shortcut is stored as an editable WebDock launch rule; no source shortcut file is required.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -290,7 +306,7 @@ private struct ShortcutEditorView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Managed shortcut files will be moved to the macOS Trash, not permanently erased.")
+            Text("Managed legacy files will be moved to the macOS Trash, not permanently erased.")
         }
         .alert(
             "WebDock",
@@ -345,7 +361,6 @@ private struct ShortcutEditorView: View {
         } catch let storeError as ShortcutStoreError {
             errorMessage = storeError.localizedDescription
             if case .trashCleanupPending = storeError {
-                // Database deletion already committed; only Trash cleanup failed.
                 onDeleted()
             }
         } catch {
