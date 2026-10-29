@@ -45,12 +45,15 @@ final class IconAssetStore {
     @discardableResult
     func importImage(_ data: Data) throws -> String {
         guard data.count <= Self.maximumAssetBytes,
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw IconError.invalidAsset }
+        let index = (0..<min(256, CGImageSourceGetCount(source))).max { lhs, rhs in
+            Self.pixelWidth(source, index: lhs) < Self.pixelWidth(source, index: rhs)
+        } ?? 0
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               width > 0, height > 0, width <= 16384, height <= 16384,
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+              let image = CGImageSourceCreateThumbnailAtIndex(source, index, [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceThumbnailMaxPixelSize: 512,
                 kCGImageSourceCreateThumbnailWithTransform: true
@@ -62,6 +65,16 @@ final class IconAssetStore {
         return id
     }
 
+    private static func pixelWidth(_ source: CGImageSource, index: Int) -> Int {
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
+        return properties?[kCGImagePropertyPixelWidth] as? Int ?? 0
+    }
+
+    func pixelWidth(for id: String) -> Int {
+        guard let data = try? data(for: id), let source = CGImageSourceCreateWithData(data as CFData, nil) else { return 0 }
+        return Self.pixelWidth(source, index: 0)
+    }
+
     func validate(_ data: Data, id: String) throws {
         guard Self.validID(id), data.count <= Self.maximumAssetBytes,
               Self.digest(data) == id,
@@ -70,7 +83,8 @@ final class IconAssetStore {
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              width > 0, height > 0, width <= 512, height <= 512 else { throw IconError.invalidAsset }
+              width > 0, height > 0, width <= 512, height <= 512,
+              CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { throw IconError.invalidAsset }
     }
 
     /// Verify before installation; used by backup/sync too. Never re-encode a transported asset.
@@ -165,6 +179,10 @@ actor WebIconDownloader {
         // Stable origin-local fallbacks; an unavailable site still reaches the generic globe.
         candidates += [WebIconCandidate(url: origin.appendingPathComponent("apple-touch-icon.png"), priority: 500),
                        WebIconCandidate(url: origin.appendingPathComponent("favicon.ico"), priority: 100)]
+        if ["google.com", "www.google.com"].contains(origin.host?.lowercased() ?? ""),
+           let url = URL(string: "https://www.gstatic.com/images/branding/product/2x/googleg_96dp.png") {
+            candidates.append(WebIconCandidate(url: url, priority: 200))
+        }
         var seen: Set<URL> = []
         return candidates.sorted { $0.priority > $1.priority }.map(\.url).filter { seen.insert($0).inserted }
     }
@@ -218,14 +236,29 @@ final class ShortcutIconService: ObservableObject {
               image(for: shortcut) == nil || force else { return }
         let key = shortcut.id.uuidString + shortcut.normalizedURLString
         guard force || !attempted.contains(key), let url = URL(string: shortcut.normalizedURLString) else { return }
+        while loading.count >= 4 {
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        guard !loading.contains(shortcut.id), !Task.isCancelled else { return }
         attempted.insert(key)
         loading.insert(shortcut.id)
         failed.remove(shortcut.id)
-        defer { loading.remove(shortcut.id) }
+        defer {
+            loading.remove(shortcut.id)
+            if Task.isCancelled { attempted.remove(key) }
+        }
+        var smallFallback: (String, String)?
         for candidate in await downloader.candidates(for: url).prefix(12) {
             guard !Task.isCancelled else { return }
             guard let (data, sourceURL) = try? await downloader.fetch(candidate),
                   let id = try? assets.importImage(data) else { continue }
+            if assets.pixelWidth(for: id) < 128 {
+                if smallFallback == nil || assets.pixelWidth(for: id) > assets.pixelWidth(for: smallFallback!.0) {
+                    smallFallback = (id, sourceURL.absoluteString)
+                }
+                continue
+            }
             // A late download must not overwrite a user choice, changed URL or deleted shortcut.
             guard let current = dataStore.shortcut(id: shortcut.id), current.deletedAt == nil,
                   current.iconMode != "custom", current.normalizedURLString == shortcut.normalizedURLString else { return }
@@ -233,7 +266,11 @@ final class ShortcutIconService: ObservableObject {
             catch { failed.insert(shortcut.id) }
             return
         }
-        failed.insert(shortcut.id)
+        if let (id, source) = smallFallback, let current = dataStore.shortcut(id: shortcut.id),
+           current.deletedAt == nil, current.iconMode != "custom", current.normalizedURLString == shortcut.normalizedURLString {
+            do { try update(current, assetID: id, mode: "automatic", source: source) }
+            catch { failed.insert(shortcut.id) }
+        } else { failed.insert(shortcut.id) }
     }
 
     func chooseIcon(for shortcut: WebShortcut) throws {
@@ -270,11 +307,12 @@ final class ShortcutIconService: ObservableObject {
 }
 
 enum IconError: LocalizedError {
-    case invalidAsset, unavailable
+    case invalidAsset, unavailable, payloadTooLarge
     var errorDescription: String? {
         switch self {
         case .invalidAsset: "Choose a valid PNG, JPEG, ICO or ICNS image up to 4 MB."
         case .unavailable: "The website icon is unavailable."
+        case .payloadTooLarge: "Portable icons exceed the limit of 512 assets or 32 MB. Reduce custom icon size before syncing or exporting."
         }
     }
 }

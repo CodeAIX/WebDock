@@ -7,7 +7,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var managerWindowController: ManagerWindowController?
     private var launcherVisibilityState = LauncherVisibilityState()
 
+    private var isTestHost: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
+        guard !isTestHost else { return }
         do {
             try bootstrapIfNeeded()
         } catch {
@@ -16,10 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !isTestHost else { return }
         do {
             try bootstrapIfNeeded()
-            try environment?.backupService.performAutomaticBackupIfNeeded()
-            environment?.syncCoordinator.start()
+            if environment?.isValidation != true {
+                try environment?.backupService.performAutomaticBackupIfNeeded()
+                environment?.syncCoordinator.start()
+            }
             launcherVisibilityState.cancelPendingShow()
             launcherPanelController?.showNearDock()
         } catch {
@@ -82,7 +91,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func bootstrapIfNeeded() throws {
         guard environment == nil else { return }
 
-        let environment = try AppEnvironment()
+        let arguments = ProcessInfo.processInfo.arguments
+        let validationIndex = arguments.firstIndex(of: "--validation-library")
+        let root: URL? = validationIndex.flatMap { index in
+            arguments.indices.contains(index + 1) ? URL(fileURLWithPath: arguments[index + 1], isDirectory: true) : nil
+        }
+        #if DEBUG
+        let validationRoot = root ?? (Bundle.main.object(forInfoDictionaryKey: "WebDockValidationLibrary") as? String).map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        }
+        #else
+        let validationRoot = root
+        #endif
+        let environment = try AppEnvironment(rootURL: validationRoot, isValidation: validationRoot != nil)
         self.environment = environment
         AppEnvironmentRegistry.shared.environment = environment
 

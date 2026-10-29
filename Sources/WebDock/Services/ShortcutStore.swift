@@ -9,13 +9,21 @@ final class ShortcutStore {
     }
 
     @discardableResult
+    func updateMetadata(_ shortcut: WebShortcut, name: String, normalizedURL: String,
+                        browserFamily: BrowserFamily?, targetAccountEmail: String?) throws -> WebShortcut {
+        try updateMetadata(shortcut, name: name, normalizedURL: normalizedURL,
+                           browserFamily: browserFamily, targetAccountEmail: targetAccountEmail,
+                           groupID: (dataStore.shortcut(id: shortcut.id) ?? shortcut).groupID)
+    }
+
+    @discardableResult
     func updateMetadata(
         _ shortcut: WebShortcut,
         name proposedName: String,
         normalizedURL rawURL: String,
         browserFamily: BrowserFamily?,
         targetAccountEmail: String?,
-        groupID: UUID? = nil
+        groupID: UUID?
     ) throws -> WebShortcut {
         let name = try validatedName(proposedName)
         let url = try validatedURL(rawURL)
@@ -25,6 +33,9 @@ final class ShortcutStore {
 
         var updated = dataStore.shortcut(id: shortcut.id) ?? shortcut
         updated.displayName = name
+        if updated.iconMode != "custom", URL(string: updated.normalizedURLString)?.host?.lowercased() != url.host?.lowercased() {
+            updated.iconMode = nil; updated.iconAssetID = nil; updated.iconSourceURL = nil
+        }
         updated.normalizedURLString = url.absoluteString
         updated.preferredBrowserFamily = browserFamily
         updated.targetAccountEmail = email

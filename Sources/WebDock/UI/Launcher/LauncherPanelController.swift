@@ -46,6 +46,8 @@ final class LauncherPanelController: NSWindowController {
 
     func showNearDock() {
         guard let panel = window, let screen = positionResolver.targetScreen() else { return }
+        let size = NSSize(width: min(780, screen.visibleFrame.width - 24), height: min(520, screen.visibleFrame.height - 24))
+        panel.setContentSize(size)
         panel.setFrameOrigin(positionResolver.origin(for: panel.frame.size, on: screen))
         panel.makeKeyAndOrderFront(nil)
     }

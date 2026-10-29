@@ -163,3 +163,31 @@ WebDAV icon bytes preserved with ETag/If-Match and 412 conflict; edits during GE
 Existing backup tests verify local bindings never enter portable data and Replace resets bindings.
 Pending two-device acceptance: manual icon on A arrives on B by folder and real WebDAV, works
 offline after restart, replace/merge restore preserves icons, account email re-resolves locally.
+
+## UI-5 interaction and appearance
+
+Automated: all four manual image formats normalize to portable PNG, changed website host clears
+an automatic icon but keeps a custom icon, initial WebDAV create uses If-None-Match: *.
+Local interactive evidence (isolated Debug app on XMAC): fixed bar across sidebar toggles,
+Library four cards, unsaved-change prompt/Keep Editing, direct Settings and ⌘,; ⌘N sheet and
+Esc cancel; ⌘F then Return enters grid focus, Right moves to next tile; light/dark rendering;
+context menu; high-resolution icons for all five reference sites; Return launched Google in
+system-default Safari and the test page was closed afterwards.
+
+Still validate on Ventura: Return launch. On both target Macs validate persistent drag/drop, delete confirmation,
+all density/subtitle/badge combinations, VoiceOver, file picker/sync/backup dialogs, screen sizes,
+Dock reopen after transitions and actual browser/account routing. Verify save/discard with external
+sync edits: clean editors reload metadata; dirty editors offer Reload Saved Values or Save.
+
+A separate UI fixture can be created without using the normal library:
+
+```sh
+python3 scripts/prepare_ui_validation.py \
+  --app /absolute/DerivedData/Build/Products/Debug/WebDock.app \
+  --output-dir /absolute/new-validation-directory
+```
+
+Open the generated WebDock UI Validation.app. It uses its own bundle ID, defaults domain and JSON
+root; background sync/automatic backups/onboarding are disabled. Its public icon requests remain
+active. The fixture is synthetic and does not establish browser-profile or two-device acceptance.
+Normal Release smoke packages contain no validation-library Info.plist key.

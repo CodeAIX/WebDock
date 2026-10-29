@@ -92,6 +92,22 @@ final class ShortcutStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testURLHostChangeInvalidatesAutomaticButKeepsCustomIcon() throws {
+        let (dataStore, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var original = WebShortcut(displayName: "Website", normalizedURLString: "https://one.example/")
+        original.iconMode = "automatic"; original.iconAssetID = String(repeating: "a", count: 64)
+        try dataStore.insertShortcut(original)
+        let store = ShortcutStore(dataStore: dataStore)
+        var updated = try store.updateMetadata(original, name: "Website", normalizedURL: "https://two.example/", browserFamily: nil, targetAccountEmail: nil)
+        XCTAssertNil(updated.iconAssetID)
+        updated.iconMode = "custom"; updated.iconAssetID = String(repeating: "b", count: 64)
+        try dataStore.updateShortcut(updated)
+        let custom = try store.updateMetadata(updated, name: "Website", normalizedURL: "https://three.example/", browserFamily: nil, targetAccountEmail: nil)
+        XCTAssertEqual(custom.iconAssetID, updated.iconAssetID)
+    }
+
+    @MainActor
     private func makeStore() throws -> (WebDockDataStore, URL) {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("WebDockStoreTests-\(UUID().uuidString)", isDirectory: true)

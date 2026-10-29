@@ -228,9 +228,10 @@ final class SyncCoordinator {
     private var isSyncing = false
     private var needsAnotherSync = false
 
-    init(dataStore: WebDockDataStore, backupService: BackupService) {
+    init(dataStore: WebDockDataStore, backupService: BackupService, enabled: Bool = true) {
         self.dataStore = dataStore
         self.backupService = backupService
+        guard enabled else { return }
 
         observers.append(
             NotificationCenter.default.addObserver(
@@ -312,6 +313,15 @@ final class SyncCoordinator {
         } catch {
             SyncStatusCenter.shared.state = .failure(error.localizedDescription)
         }
+    }
+
+    func testConnection() async throws -> String {
+        let snapshot = try await makeProvider().load()
+        if let snapshot {
+            try dataStore.validateAssets(in: snapshot)
+            return "Remote library read successfully."
+        }
+        return "Server reached; no sync file found. Sync still requires a writable folder."
     }
 
     private func makeProvider() throws -> any CanonicalSyncProvider {

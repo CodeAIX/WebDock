@@ -1,16 +1,22 @@
+import AppKit
 import SwiftUI
 
 struct ManagerView: View {
     let environment: AppEnvironment
 
+    @ObservedObject private var navigation: LibraryNavigation
     @ObservedObject private var dataStore: WebDockDataStore
     @State private var selectedID: UUID?
+    @State private var editorHasChanges = false
+    @State private var pendingSelection: UUID?
+    @State private var showDiscardChanges = false
     @State private var showNewShortcutSheet = false
     @State private var searchText = ""
     @State private var groupFilter: UUID?
 
     init(environment: AppEnvironment) {
         self.environment = environment
+        _navigation = ObservedObject(wrappedValue: environment.libraryNavigation)
         _dataStore = ObservedObject(wrappedValue: environment.dataStore)
     }
 
@@ -25,7 +31,7 @@ struct ManagerView: View {
 
     private var selectedShortcut: WebShortcut? {
         guard let selectedID else { return nil }
-        return shortcuts.first(where: { $0.id == selectedID })
+        return dataStore.activeShortcuts.first(where: { $0.id == selectedID })
     }
 
     var body: some View {
@@ -40,7 +46,7 @@ struct ManagerView: View {
                     Text("All Shortcuts").tag(nil as UUID?)
                     ForEach(dataStore.activeGroups) { Text($0.name).tag(Optional($0.id)) }
                 }.padding(.horizontal, 12)
-            List(selection: $selectedID) {
+            List(selection: Binding(get: { selectedID }, set: requestSelection)) {
                 ForEach(shortcuts, id: \.id) { shortcut in
                     ManagerShortcutRow(
                         shortcut: shortcut,
@@ -48,6 +54,10 @@ struct ManagerView: View {
                         iconService: environment.iconService
                     )
                     .tag(shortcut.id)
+                    .contextMenu {
+                        Button("Move Up") { reorder(shortcut, offset: -1) }
+                        Button("Move Down") { reorder(shortcut, offset: 1) }
+                    }
                 }
             }
             }
@@ -59,8 +69,10 @@ struct ManagerView: View {
                     shortcut: shortcut,
                     environment: environment,
                     onDeleted: {
+                        editorHasChanges = false
                         selectedID = shortcuts.first?.id
-                    }
+                    },
+                    onDirtyChange: { editorHasChanges = $0 }
                 )
                 .id(shortcut.id)
             } else {
@@ -74,19 +86,43 @@ struct ManagerView: View {
         }
         .sheet(isPresented: $showNewShortcutSheet) {
             NewShortcutSheet(environment: environment) { shortcut in
-                selectedID = shortcut.id
+                requestSelection(shortcut.id)
             }
         }
         .onAppear {
             if selectedID == nil {
-                selectedID = shortcuts.first?.id
+                selectedID = navigation.shortcutID ?? shortcuts.first?.id
             }
         }
-        .onChange(of: shortcuts.map(\.id)) { ids in
+        .onChange(of: navigation.shortcutID) { id in
+            searchText = ""; groupFilter = nil
+            requestSelection(id)
+        }
+        .confirmationDialog("Discard unsaved changes?", isPresented: $showDiscardChanges, titleVisibility: .visible) {
+            Button("Discard Changes", role: .destructive) {
+                editorHasChanges = false; selectedID = pendingSelection; pendingSelection = nil
+            }
+            Button("Keep Editing", role: .cancel) { pendingSelection = nil }
+        }
+        .onChange(of: dataStore.activeShortcuts.map(\.id)) { ids in
             if let selectedID, ids.contains(selectedID) { return }
             selectedID = ids.first
         }
     }
+    private func requestSelection(_ id: UUID?) {
+        guard id != selectedID else { return }
+        if editorHasChanges { pendingSelection = id; showDiscardChanges = true }
+        else { selectedID = id }
+    }
+
+    private func reorder(_ shortcut: WebShortcut, offset: Int) {
+        guard searchText.isEmpty, groupFilter == nil,
+              let index = shortcuts.firstIndex(where: { $0.id == shortcut.id }),
+              shortcuts.indices.contains(index + offset) else { return }
+        do { try environment.shortcutStore.moveForDrop(shortcutID: shortcut.id, onto: shortcuts[index + offset].id) }
+        catch { NSAlert(error: error).runModal() }
+    }
+
 }
 
 private struct ManagerShortcutRow: View {
@@ -119,7 +155,10 @@ private struct ShortcutEditorView: View {
     let shortcut: WebShortcut
     let environment: AppEnvironment
     let onDeleted: () -> Void
+    let onDirtyChange: (Bool) -> Void
 
+    @State private var metadataBaseline: WebShortcut
+    @State private var externalEdit = false
     @State private var name: String
     @State private var urlString: String
     @State private var browserSelection: String
@@ -138,11 +177,14 @@ private struct ShortcutEditorView: View {
     init(
         shortcut: WebShortcut,
         environment: AppEnvironment,
-        onDeleted: @escaping () -> Void
+        onDeleted: @escaping () -> Void,
+        onDirtyChange: @escaping (Bool) -> Void
     ) {
         self.shortcut = shortcut
         self.environment = environment
         self.onDeleted = onDeleted
+        self.onDirtyChange = onDirtyChange
+        _metadataBaseline = State(initialValue: shortcut)
         _name = State(initialValue: shortcut.displayName)
         _urlString = State(initialValue: shortcut.normalizedURLString)
         _browserSelection = State(
@@ -290,6 +332,11 @@ private struct ShortcutEditorView: View {
             }
 
             WebDockCard(title: "Actions") {
+                if externalEdit {
+                    Text("This shortcut changed while you were editing. Save uses your edits, or reload the saved values.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("Reload Saved Values") { loadMetadata(currentShortcut); onDirtyChange(localOverrideChanged) }
+                }
                 HStack {
                     Button("Test Launch") { testLaunch() }
                     Button("Duplicate") { duplicate() }
@@ -318,6 +365,15 @@ private struct ShortcutEditorView: View {
         .textFieldStyle(.roundedBorder)
         .navigationTitle(shortcut.displayName)
         .onAppear(perform: loadLocalOverride)
+        .onChange(of: [name, urlString, browserSelection, accountEmail, groupID?.uuidString ?? "", localBrowserSelection, localProfileSelection]) { _ in
+            onDirtyChange(hasChanges || localOverrideChanged)
+        }
+        .onChange(of: currentShortcut) { updated in
+            if !hasChanges { loadMetadata(updated) }
+            else if metadataMatches(updated, metadataBaseline) { metadataBaseline = updated }
+            else { externalEdit = true }
+            onDirtyChange(hasChanges || localOverrideChanged)
+        }
         .onChange(of: browserSelection) { _ in
             if selectedFamily?.supportsAccountRouting != true {
                 accountEmail = ""
@@ -356,6 +412,25 @@ private struct ShortcutEditorView: View {
         }
     }
 
+    private var hasChanges: Bool {
+        name != metadataBaseline.displayName || urlString != metadataBaseline.normalizedURLString ||
+        browserSelection != (metadataBaseline.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken) ||
+        accountEmail != (metadataBaseline.targetAccountEmail ?? "") || groupID != metadataBaseline.groupID
+    }
+
+    private func metadataMatches(_ lhs: WebShortcut, _ rhs: WebShortcut) -> Bool {
+        lhs.displayName == rhs.displayName && lhs.normalizedURLString == rhs.normalizedURLString &&
+        lhs.preferredBrowserFamily == rhs.preferredBrowserFamily && lhs.targetAccountEmail == rhs.targetAccountEmail && lhs.groupID == rhs.groupID
+    }
+
+    private func loadMetadata(_ updated: WebShortcut) {
+        metadataBaseline = updated
+        name = updated.displayName; urlString = updated.normalizedURLString
+        browserSelection = updated.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken
+        accountEmail = updated.targetAccountEmail ?? ""; groupID = updated.groupID
+        externalEdit = false
+    }
+
     private var currentShortcut: WebShortcut {
         environment.dataStore.shortcut(id: shortcut.id) ?? shortcut
     }
@@ -391,12 +466,10 @@ private struct ShortcutEditorView: View {
                 groupID: groupID
             )
             _ = try environment.deviceBindingResolver.refreshBinding(for: updated)
-            name = updated.displayName
-            urlString = updated.normalizedURLString
-            browserSelection = updated.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken
-            accountEmail = updated.targetAccountEmail ?? ""
+            loadMetadata(updated)
             resolutionRefresh = UUID()
             didSave = true
+            onDirtyChange(localOverrideChanged)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                 didSave = false
             }
@@ -430,6 +503,7 @@ private struct ShortcutEditorView: View {
                 )
             }
             resolutionRefresh = UUID()
+            onDirtyChange(hasChanges)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -441,6 +515,7 @@ private struct ShortcutEditorView: View {
             localBrowserSelection = Self.automaticLocalBrowserToken
             localProfileSelection = Self.defaultLocalProfileToken
             resolutionRefresh = UUID()
+            onDirtyChange(hasChanges)
         } catch {
             errorMessage = error.localizedDescription
         }

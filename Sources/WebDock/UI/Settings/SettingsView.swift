@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     let environment: AppEnvironment
@@ -11,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(SyncPreferences.webDAVUsernameKey) private var webDAVUsername = ""
 
     @StateObject private var syncStatus = SyncStatusCenter.shared
+    @State private var testingConnection = false
     @State private var selectedPage = SettingsPage.general
     @AppStorage("WebDock.launcherSidebarVisible") private var sidebarVisible = true
     @State private var webDAVPassword = ""
@@ -62,6 +64,7 @@ struct SettingsView: View {
             }
             loadWebDAVPassword()
         }
+        .onChange(of: webDAVUsername) { _ in loadWebDAVPassword() }
         .onChange(of: providerRaw) { _ in
             NotificationCenter.default.post(name: .webDockSyncPreferenceChanged, object: nil)
         }
@@ -80,7 +83,7 @@ struct SettingsView: View {
                 pendingRestoreURL = nil
             }
         } message: {
-            Text("WebDock creates a local pre-restore snapshot first. Replace also clears device bindings for portable backups; Merge keeps current device bindings and uses newest-record-wins semantics.")
+            Text("A safety backup is created first. Replace swaps the current library; Merge combines both libraries using the latest edits. Browser accounts are matched on this Mac.")
         }
         .alert(
             "WebDock",
@@ -170,6 +173,14 @@ struct SettingsView: View {
                     TextField("Username", text: $webDAVUsername)
                     SecureField("Password / app password", text: $webDAVPassword)
                     HStack {
+                        Button(testingConnection ? "Testing…" : "Test Connection") {
+                            testingConnection = true
+                            Task { @MainActor in
+                                defer { testingConnection = false }
+                                do { statusMessage = try await environment.syncCoordinator.testConnection() }
+                                catch { errorMessage = error.localizedDescription }
+                            }
+                        }.disabled(testingConnection)
                         Button("Save Credentials") {
                             saveWebDAVCredentials()
                         }
@@ -222,7 +233,9 @@ struct SettingsView: View {
             Section("Privacy") {
                 Text("WebDock reads only browser profile metadata needed to match account names and emails. It does not read cookies, passwords, browsing history, or saved browser credentials.")
                     .foregroundStyle(.secondary)
-                Text("WebDAV passwords live in macOS Keychain. WebDock uses no Apple cloud service entitlement.")
+                Text("Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom icons and account emails are included in portable backups and your selected sync destination.")
+                    .foregroundStyle(.secondary)
+                Text("WebDAV passwords live in macOS Keychain.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -272,7 +285,7 @@ struct SettingsView: View {
         let panel = NSSavePanel()
         panel.title = "Export WebDock Backup"
         panel.nameFieldStringValue = "WebDock Backup.webdockbackup"
-        panel.allowedFileTypes = ["webdockbackup"]
+        panel.allowedContentTypes = [UTType(filenameExtension: "webdockbackup") ?? .json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try environment.backupService.exportPortable(to: url)
@@ -288,7 +301,7 @@ struct SettingsView: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
-        panel.allowedFileTypes = ["webdockbackup"]
+        panel.allowedContentTypes = [UTType(filenameExtension: "webdockbackup") ?? .json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         pendingRestoreURL = url
         showRestoreOptions = true
