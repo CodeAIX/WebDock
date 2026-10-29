@@ -35,6 +35,7 @@ final class BackupService {
     private let fileManager: FileManager
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private var canonicalChangeObserver: NSObjectProtocol?
 
     init(
         dataStore: WebDockDataStore,
@@ -52,6 +53,22 @@ final class BackupService {
         decoder.dateDecodingStrategy = .iso8601
 
         try fileManager.createDirectory(at: backupsURL, withIntermediateDirectories: true)
+
+        canonicalChangeObserver = NotificationCenter.default.addObserver(
+            forName: .webDockCanonicalDataDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                try? self?.performAutomaticBackupIfNeeded()
+            }
+        }
+    }
+
+    deinit {
+        if let canonicalChangeObserver {
+            NotificationCenter.default.removeObserver(canonicalChangeObserver)
+        }
     }
 
     func performAutomaticBackupIfNeeded(now: Date = Date()) throws {
@@ -69,6 +86,11 @@ final class BackupService {
     @discardableResult
     func createManualSnapshot() throws -> URL {
         try createLocalSnapshot(prefix: "Manual", date: Date())
+    }
+
+    @discardableResult
+    func createSafetySnapshot(prefix: String) throws -> URL {
+        try createLocalSnapshot(prefix: prefix, date: Date())
     }
 
     @discardableResult
@@ -132,7 +154,8 @@ final class BackupService {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd_HHmmss"
-        let filename = "\(prefix)-\(formatter.string(from: date)).webdockbackup"
+        let safePrefix = prefix.replacingOccurrences(of: "/", with: "-")
+        let filename = "\(safePrefix)-\(formatter.string(from: date)).webdockbackup"
         let url = backupsURL.appendingPathComponent(filename, isDirectory: false)
         try write(envelope, to: url)
         return url
