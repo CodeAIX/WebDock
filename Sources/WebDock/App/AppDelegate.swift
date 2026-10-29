@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             for url in urls {
                 do {
-                    try await importCoordinator.importFile(url)
+                    try await importCoordinator.importItem(url)
                 } catch {
                     NSAlert(error: error).runModal()
                 }
