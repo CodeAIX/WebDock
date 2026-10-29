@@ -147,3 +147,10 @@ local overrides (Apply disabled when unchanged); group creation; duplicate exclu
 Save/Delete/Test Launch. Verify each Settings page (General, Browsers & Accounts, Sync,
 Backup & Restore, Appearance, Privacy), light/dark/System themes, scrolling at 780 × 600,
 Keychain credential save, sync and backup/restore dialogs. Existing services retain their semantics.
+
+## UI-3 icons
+
+Automated: icon metadata parsing/priority/relative URLs, forbidden URL schemes, hash/path validation,
+invalid image rejection, optional legacy fields. Pending real-Mac: ChatGPT, Claude, Google, DeepSeek,
+GitHub high-resolution appearance; PNG/JPEG/ICO/ICNS picker, custom/reset/refresh, local browser
+badge reflects override/default, account subtitle, warning tooltip, offline globe, light/dark.

@@ -89,6 +89,9 @@ struct WebShortcut: Identifiable, Codable, Equatable, Hashable {
     var id: UUID
     var displayName: String
     var normalizedURLString: String
+    var iconMode: String?
+    var iconAssetID: String?
+    var iconSourceURL: String?
     var preferredBrowserFamilyRaw: String?
     var targetAccountEmail: String?
     var groupID: UUID?

@@ -193,3 +193,17 @@ Settings:
 - two Macs may resolve the same email to different Profile N directories;
 - real acceptance includes Intel macOS 13.6.9 and a current Apple Silicon Mac;
 - CI + universal Release smoke build pass before merge.
+
+## UI-3 website icons
+
+Shortcuts add optional iconMode/iconAssetID/iconSourceURL fields; legacy JSON remains readable.
+Icons are normalized to PNG (at most 512 pixels), addressed by SHA-256 in Icons/, and rendered
+inside continuous rounded containers with the resolved local browser's app icon. Account username
+is presentation only; email retains its identity semantics. Before the first icon metadata edit,
+a Pre-Icon-Metadata local snapshot is required.
+
+Automatic discovery reads unauthenticated origin homepage icon links and manifests using an ephemeral
+session without shared cookies/credentials. Priority: manifest, apple touch icon, favicon, origin
+fallbacks, globe. Downloads are bounded in size/time; failures never block launch. Manual choice
+wins over in-flight automatic discovery. Reset returns to automatic mode. UI-4 transports assets;
+UI-3 alone renders and stores them locally.

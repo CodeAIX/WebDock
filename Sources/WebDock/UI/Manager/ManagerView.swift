@@ -44,7 +44,8 @@ struct ManagerView: View {
                 ForEach(shortcuts, id: \.id) { shortcut in
                     ManagerShortcutRow(
                         shortcut: shortcut,
-                        resolution: environment.deviceBindingResolver.resolution(for: shortcut)
+                        resolution: environment.deviceBindingResolver.resolution(for: shortcut),
+                        iconService: environment.iconService
                     )
                     .tag(shortcut.id)
                 }
@@ -91,23 +92,11 @@ struct ManagerView: View {
 private struct ManagerShortcutRow: View {
     let shortcut: WebShortcut
     let resolution: ShortcutResolution
+    let iconService: ShortcutIconService
 
     var body: some View {
         HStack(spacing: 10) {
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.quaternary)
-                    .frame(width: 34, height: 34)
-                Image(systemName: "globe")
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(width: 34, height: 34)
-                if resolution.hasWarning {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.yellow)
-                        .offset(x: 4, y: -3)
-                }
-            }
+            WebsiteIconView(shortcut: shortcut, resolution: resolution, service: iconService, size: 34)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(shortcut.displayName)
@@ -201,6 +190,24 @@ private struct ShortcutEditorView: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 16) {
             WebDockCard(title: "Shortcut") {
+                HStack(spacing: 16) {
+                    WebsiteIconView(shortcut: currentShortcut, resolution: resolution, service: environment.iconService)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(currentShortcut.iconMode == "custom" ? "Custom Icon" : "Automatic Icon").font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Button("Choose Icon…") {
+                                do { try environment.iconService.chooseIcon(for: currentShortcut) }
+                                catch { errorMessage = error.localizedDescription }
+                            }
+                            Button("Reset") {
+                                do { try environment.iconService.reset(currentShortcut) }
+                                catch { errorMessage = error.localizedDescription }
+                            }
+                            Button("Refresh") { Task { await environment.iconService.loadIfNeeded(currentShortcut, force: true) } }
+                                .disabled(currentShortcut.iconMode == "custom")
+                        }
+                    }
+                }.padding(.bottom, 6)
                 TextField("Name", text: $name)
                 TextField("URL", text: $urlString)
                 Picker("Group", selection: $groupID) {
@@ -347,6 +354,10 @@ private struct ShortcutEditorView: View {
         } message: {
             Text(errorMessage ?? "Unknown error")
         }
+    }
+
+    private var currentShortcut: WebShortcut {
+        environment.dataStore.shortcut(id: shortcut.id) ?? shortcut
     }
 
     private var localOverrideChanged: Bool {
