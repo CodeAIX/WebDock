@@ -43,12 +43,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isLauncherVisible: launcherPanelController.isVisible
         )
         applyLauncherAction(action)
-
-        // Never synchronously show a hidden launcher from the Dock reopen
-        // callback. The app may still be crossing an activation boundary, and
-        // a late resign event from the previous cycle can otherwise hide a
-        // freshly shown panel. Service the pending show on the next run-loop
-        // turn, and only while NSApp is truly active.
         servicePendingLauncherShowOnNextRunLoop()
         return false
     }
@@ -68,10 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task { @MainActor [weak self] in
             var failures: [(url: URL, message: String)] = []
+            var cleanupWarnings: [(url: URL, message: String)] = []
 
             for url in urls {
                 do {
                     try await importCoordinator.importItem(url)
+                } catch let importError as ImportCoordinatorError {
+                    switch importError {
+                    case .sourceCleanupPending:
+                        cleanupWarnings.append((url, importError.localizedDescription))
+                    }
                 } catch {
                     failures.append((url, error.localizedDescription))
                 }
@@ -80,22 +80,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.launcherVisibilityState.cancelPendingShow()
             self?.launcherPanelController?.showNearDock()
 
-            guard !failures.isEmpty else { return }
+            guard !failures.isEmpty || !cleanupWarnings.isEmpty else { return }
+
             let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = failures.count == 1
-                ? "Shortcut Could Not Be Added"
-                : "Some Shortcuts Could Not Be Added"
-            alert.informativeText = failures.map { failure in
-                let name = failure.url.lastPathComponent.isEmpty
-                    ? failure.url.absoluteString
-                    : failure.url.lastPathComponent
-                return "• \(name): \(failure.message)"
+            alert.alertStyle = failures.isEmpty ? .informational : .warning
+
+            if failures.isEmpty {
+                alert.messageText = cleanupWarnings.count == 1
+                    ? "Shortcut Added — Original File Kept"
+                    : "Shortcuts Added — Some Original Files Kept"
+            } else {
+                alert.messageText = failures.count == 1
+                    ? "Shortcut Could Not Be Added"
+                    : "Some Shortcuts Could Not Be Added"
             }
-            .joined(separator: "\n")
+
+            var sections: [String] = []
+            if !failures.isEmpty {
+                let lines = failures.map { item in
+                    "• \(self?.displayName(for: item.url) ?? item.url.lastPathComponent): \(item.message)"
+                }
+                sections.append(lines.joined(separator: "\n"))
+            }
+            if !cleanupWarnings.isEmpty {
+                let lines = cleanupWarnings.map { item in
+                    "• \(self?.displayName(for: item.url) ?? item.url.lastPathComponent): imported successfully; the original file remains in place."
+                }
+                sections.append(lines.joined(separator: "\n"))
+            }
+
+            alert.informativeText = sections.joined(separator: "\n\n")
             alert.addButton(withTitle: "OK")
             alert.runModal()
         }
+    }
+
+    private func displayName(for url: URL) -> String {
+        url.lastPathComponent.isEmpty ? url.absoluteString : url.lastPathComponent
     }
 
     private func servicePendingLauncherShowOnNextRunLoop() {
