@@ -32,6 +32,7 @@ enum ShortcutImportError: LocalizedError {
     }
 }
 
+@discardableResult
 func validateWebURL(_ url: URL) throws -> URL {
     guard let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
         throw ShortcutImportError.unsafeScheme
@@ -41,7 +42,7 @@ func validateWebURL(_ url: URL) throws -> URL {
 
 struct ChromeWeblocImporter: ShortcutImporter {
     func canImport(_ url: URL) -> Bool {
-        url.pathExtension.lowercased() == "crwebloc"
+        url.isFileURL && url.pathExtension.lowercased() == "crwebloc"
     }
 
     func inspect(_ url: URL) async throws -> ImportedShortcutDraft {
@@ -58,7 +59,7 @@ struct ChromeWeblocImporter: ShortcutImporter {
               let target = URL(string: rawURL) else {
             throw ShortcutImportError.missingURL
         }
-        _ = try validateWebURL(target)
+        try validateWebURL(target)
         guard let profile = plist["CrProfile"] as? String,
               !profile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ShortcutImportError.missingChromeProfile
@@ -77,7 +78,7 @@ struct ChromeWeblocImporter: ShortcutImporter {
 
 struct WeblocImporter: ShortcutImporter {
     func canImport(_ url: URL) -> Bool {
-        url.pathExtension.lowercased() == "webloc"
+        url.isFileURL && url.pathExtension.lowercased() == "webloc"
     }
 
     func inspect(_ url: URL) async throws -> ImportedShortcutDraft {
@@ -94,7 +95,7 @@ struct WeblocImporter: ShortcutImporter {
               let target = URL(string: rawURL) else {
             throw ShortcutImportError.missingURL
         }
-        _ = try validateWebURL(target)
+        try validateWebURL(target)
         return ImportedShortcutDraft(
             displayName: url.deletingPathExtension().lastPathComponent,
             url: target,
@@ -108,7 +109,7 @@ struct WeblocImporter: ShortcutImporter {
 
 struct InternetShortcutImporter: ShortcutImporter {
     func canImport(_ url: URL) -> Bool {
-        url.pathExtension.lowercased() == "url"
+        url.isFileURL && url.pathExtension.lowercased() == "url"
     }
 
     func inspect(_ url: URL) async throws -> ImportedShortcutDraft {
@@ -127,7 +128,7 @@ struct InternetShortcutImporter: ShortcutImporter {
 
         let rawURL = String(line[line.index(after: equals)...]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard let target = URL(string: rawURL) else { throw ShortcutImportError.missingURL }
-        _ = try validateWebURL(target)
+        try validateWebURL(target)
 
         return ImportedShortcutDraft(
             displayName: url.deletingPathExtension().lastPathComponent,
@@ -136,6 +137,31 @@ struct InternetShortcutImporter: ShortcutImporter {
             launchMode: .defaultBrowser,
             browserProfileHint: nil,
             sourceFileURL: url
+        )
+    }
+}
+
+/// Imports an HTTP(S) URL directly without creating or consuming a Finder file.
+/// This is used when a URL is dragged to WebDock or is added from the manager UI.
+struct URLImporter: ShortcutImporter {
+    func canImport(_ url: URL) -> Bool {
+        guard !url.isFileURL, let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
+    }
+
+    func inspect(_ url: URL) async throws -> ImportedShortcutDraft {
+        let target = try validateWebURL(url)
+        let name = target.host(percentEncoded: false)
+            ?? target.host
+            ?? target.absoluteString
+
+        return ImportedShortcutDraft(
+            displayName: name,
+            url: target,
+            sourceType: .directURL,
+            launchMode: .defaultBrowser,
+            browserProfileHint: nil,
+            sourceFileURL: nil
         )
     }
 }
