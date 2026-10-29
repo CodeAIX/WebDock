@@ -1,115 +1,115 @@
-# WebDock Test Plan — M9
+# WebDock Test Plan — v0.3
 
-## Automated unit tests
+## Automated tests
 
-### Canonical model
-- only valid HTTP/HTTPS URLs accepted
-- BrowserFamily persists
-- account email is trimmed/lowercased
-- unsupported/default browser rules do not retain irrelevant account identity
-- canonical tombstone deletion persists
+### Canonical model / creation
+- only HTTP/HTTPS URLs accepted;
+- BrowserFamily persists;
+- account email is trimmed/lowercased;
+- default/non-profile browser rules drop irrelevant account identity;
+- tombstone deletion persists.
 
-### Account matching
-- email match succeeds regardless of local Profile number
-- email comparison is case-insensitive
-- zero matches -> none
-- duplicate matches -> ambiguous
-- Gmail dots/plus aliases are not rewritten
+### JSON persistence
+- Canonical.json survives store reload;
+- DeviceBindings.json survives reload;
+- canonical snapshot excludes DeviceBindings/Profile N;
+- atomic writes do not replace in-memory state until persistence succeeds;
+- unsupported future schema is rejected.
 
-### Device resolution
-- exact account match resolves local Profile directory
-- missing account -> preferred browser default + warning
-- ambiguous account -> preferred browser default + warning
-- missing browser -> system default + warning
-- valid device override takes precedence
-- override is stored only in DeviceShortcutBinding
+### Account matching / device resolution
+- email match ignores local Profile number and email case;
+- zero matches -> missing account fallback;
+- duplicate matches -> ambiguous fallback;
+- Gmail dots/plus aliases are not rewritten;
+- missing browser -> system default + warning;
+- device-only override stays local.
 
 ### Launching
-- system default opens URL normally
-- resolved Chromium profile writes transient URL + CrProfile route
-- missing account opens URL in preferred browser without profile route
-- disappearance of browser between resolution/click falls back safely
+- system default opens URL normally;
+- resolved Chromium profile writes transient URL + CrProfile route;
+- missing account opens preferred browser without profile route;
+- browser disappearance between resolution/click falls back safely.
+
+### Backup
+- portable `.webdockbackup` contains canonical email/browser identity;
+- portable backup excludes DeviceBindings/Profile N;
+- local snapshot may contain DeviceBindings;
+- portable Replace restore clears device bindings;
+- Merge restore uses UUID/updatedAt/tombstone semantics;
+- restore creates Pre-Restore snapshot.
 
 ### Sync
-- snapshot contains BrowserFamily/account email
-- snapshot never contains local profile directory or DeviceShortcutBinding
-- UUID identity merges per-record by updatedAt
-- tombstones merge like normal records
-- groups/order round-trip
-
-### Persistence
-- canonical shortcut survives local SwiftData reload
-- DeviceShortcutBinding can persist locally without appearing in sync snapshot
+- Synced Folder round-trips CanonicalSnapshot through WebDockSync.json;
+- sync payload never contains Profile N/DeviceBindings;
+- same UUID uses newer updatedAt;
+- newer tombstone wins;
+- WebDAV password is not serialized into canonical data;
+- WebDAV conditional write behavior uses ETag/If-Match and detects 412 conflicts.
 
 ## CI contract
 
 Every branch/PR must:
-- validate Info.plist
-- assert no `.crwebloc`, `.webloc`, `.url` document handlers
-- assert WebDock is not an HTTP/HTTPS handler
-- validate iCloud entitlement plist
-- generate Xcode project
-- compile app/tests
-- pass tests
+- validate Info.plist;
+- assert no `.crwebloc`, `.webloc`, `.url` document handlers;
+- assert no HTTP/HTTPS handler registration;
+- assert macOS deployment target = 13.0;
+- fail if SwiftData or Apple cloud entitlement/provider code returns to active sources;
+- generate Xcode project;
+- build/test with `MACOSX_DEPLOYMENT_TARGET=13.0`;
+- verify built `LSMinimumSystemVersion = 13.0`.
 
-Release smoke build must additionally:
-- build Release app
-- validate built Info.plist
-- ad-hoc sign with configured entitlements
-- verify signature/bundle
-- package and integrity-check ZIP
+Release smoke build additionally must:
+- build Release for generic macOS with `ARCHS='arm64 x86_64'`;
+- verify both architecture slices with `lipo`;
+- ad-hoc sign without restricted entitlements;
+- verify bundle signature;
+- package and integrity-check ZIP.
 
 ## Real-Mac acceptance
 
-### Core launcher
-1. fresh v0.2 starts with no legacy shortcuts
-2. create via Launcher `+`
-3. create via Manager `+`
-4. reorder and verify persistence after restart
-5. edit/delete and verify UI state
-6. outside-click/Dock-reopen behavior remains correct
+### Current Apple Silicon Mac
+1. first launch shows Browser Account Access guidance;
+2. Authorize triggers macOS-owned access flow where applicable;
+3. Settings > Browsers & Accounts reports access/rescan status;
+4. Privacy & Security shortcut opens System Settings;
+5. create via Launcher + and Manager +;
+6. edit/delete/reorder and verify restart persistence;
+7. Chrome account routing still opens the correct normal profile/tab;
+8. missing account/browser warning/fallback behavior remains correct.
 
-### Account routing
-On Mac A:
-1. choose Chrome + a readable signed-in account email
-2. verify resolution shows the local Profile directory/account
-3. launch into the correct normal Chrome tab/profile
+### Intel macOS 13.6.9
+1. app launches normally;
+2. Launcher/Manager/Settings render without macOS 14-only API failure;
+3. create/edit/delete/reorder persist across restart;
+4. browser/profile detection and routing work;
+5. backup/export/restore work;
+6. universal executable runs natively as x86_64.
 
-Missing-account scenario:
-1. set target email not present locally
-2. verify warning badge/editor warning
-3. launch still succeeds in Chrome default profile
+### Backup & restore
+1. Back Up Now creates a full local snapshot;
+2. Open Backup Folder reveals it;
+3. Export Portable Backup creates `.webdockbackup`;
+4. inspect/verify portable file contains account email but no Profile N;
+5. Replace restore reverts library and re-resolves local accounts;
+6. Merge restore combines nonconflicting records;
+7. Pre-Restore safety snapshot exists.
 
-Ambiguous scenario:
-1. if reproducible, same email in multiple profiles
-2. verify ambiguous warning
-3. choose a device-only override
-4. verify launch uses selected local profile without changing canonical email
+### Synced Folder — two Macs
+1. choose the same externally synchronized folder on both Macs;
+2. Mac A: `account@example.com -> Profile 12`;
+3. Mac B: same email -> `Profile 3`;
+4. create/edit/reorder/delete on A and Sync Now;
+5. external folder transport completes;
+6. Sync Now on B;
+7. B receives account email, never Profile 12;
+8. B resolves to Profile 3 and launches correctly;
+9. local override on B never appears on A.
 
-Missing-browser scenario:
-1. choose browser family unavailable on the Mac
-2. verify warning
-3. verify URL opens in system default browser
-
-## Two-Mac sync acceptance
-
-Prerequisite: both builds signed/provisioned for `iCloud.io.github.codeaix.WebDock` and signed into iCloud.
-
-1. Mac A Chrome: `account@example.com -> Profile 12`
-2. Mac B Chrome: same email -> `Profile 3`
-3. create shortcut on A with Chrome + `account@example.com`
-4. sync to B
-5. verify B canonical record contains email, not Profile 12
-6. verify B resolves locally to Profile 3
-7. launch and verify correct account
-8. reorder/edit/delete on either Mac and verify propagation
-9. verify a device-only override on B does not modify A
-
-## WebDAV future gate
-
-Before enabling WebDAV:
-- same canonical snapshot encoder/merge engine reused
-- credentials stored in Keychain
-- ETag/If-Match conflict handling tested
-- no Profile N/device binding in payload
-- sync errors never corrupt local canonical data
+### WebDAV
+1. configure an existing test WebDAV directory;
+2. Save Credentials then Sync Now;
+3. verify remote `WebDockSync.json` is canonical only;
+4. second Mac pulls/merges successfully;
+5. edit both sides to exercise ETag conflict retry;
+6. wrong credentials/network failure surfaces an error without corrupting local data;
+7. Keychain holds password; JSON/preferences do not.

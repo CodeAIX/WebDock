@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 
 enum BrowserFamily: String, Codable, CaseIterable, Identifiable, Hashable {
     case safari
@@ -47,7 +46,7 @@ enum DeviceResolutionStatus: String, Codable, CaseIterable {
 
 enum SyncProviderKind: String, Codable, CaseIterable, Identifiable {
     case off
-    case iCloud
+    case syncedFolder
     case webDAV
 
     var id: String { rawValue }
@@ -55,34 +54,39 @@ enum SyncProviderKind: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .off: "Off"
-        case .iCloud: "iCloud"
+        case .syncedFolder: "Synced Folder"
         case .webDAV: "WebDAV"
         }
     }
 }
 
-@Model
-final class ShortcutGroup {
-    @Attribute(.unique) var id: UUID
+struct ShortcutGroup: Identifiable, Codable, Equatable, Hashable {
+    var id: UUID
     var name: String
     var sortIndex: Double
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
 
-    init(id: UUID = UUID(), name: String, sortIndex: Double = 0) {
-        let now = Date()
+    init(
+        id: UUID = UUID(),
+        name: String,
+        sortIndex: Double = 0,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        deletedAt: Date? = nil
+    ) {
         self.id = id
         self.name = name
         self.sortIndex = sortIndex
-        self.createdAt = now
-        self.updatedAt = now
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
     }
 }
 
-@Model
-final class WebShortcut {
-    @Attribute(.unique) var id: UUID
+struct WebShortcut: Identifiable, Codable, Equatable, Hashable {
+    var id: UUID
     var displayName: String
     var normalizedURLString: String
     var preferredBrowserFamilyRaw: String?
@@ -128,22 +132,21 @@ final class WebShortcut {
     }
 }
 
-/// Machine-local resolution state. This model is deliberately excluded from
-/// every sync payload: local profile directory names such as `Profile 12` are
-/// implementation details of one Mac and are never portable shortcut identity.
-@Model
-final class DeviceShortcutBinding {
-    @Attribute(.unique) var shortcutID: UUID
+/// Machine-local resolution state. This never appears in portable backups or
+/// synchronization payloads: local `Profile N` directory names are details of
+/// one Mac, not portable account identity.
+struct DeviceShortcutBinding: Identifiable, Codable, Equatable, Hashable {
+    var shortcutID: UUID
     var resolvedBrowserBundleIdentifier: String?
     var resolvedProfileDirectory: String?
     var resolvedAccountEmail: String?
     var resolutionStatusRaw: String
     var warningMessage: String?
-
-    /// Explicit per-device override. These values never sync.
     var overrideBrowserBundleIdentifier: String?
     var overrideProfileDirectory: String?
     var updatedAt: Date
+
+    var id: UUID { shortcutID }
 
     init(shortcutID: UUID) {
         self.shortcutID = shortcutID
@@ -154,5 +157,18 @@ final class DeviceShortcutBinding {
     var resolutionStatus: DeviceResolutionStatus {
         get { DeviceResolutionStatus(rawValue: resolutionStatusRaw) ?? .systemDefault }
         set { resolutionStatusRaw = newValue.rawValue }
+    }
+}
+
+struct CanonicalSnapshot: Codable, Equatable {
+    static let currentSchemaVersion = 1
+
+    var schemaVersion: Int = currentSchemaVersion
+    var shortcuts: [WebShortcut]
+    var groups: [ShortcutGroup]
+    var generatedAt: Date
+
+    static var empty: CanonicalSnapshot {
+        CanonicalSnapshot(shortcuts: [], groups: [], generatedAt: Date(timeIntervalSince1970: 0))
     }
 }

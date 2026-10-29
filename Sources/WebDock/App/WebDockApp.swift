@@ -7,7 +7,22 @@ struct WebDockApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView()
+            SettingsRootView()
+        }
+    }
+}
+
+private struct SettingsRootView: View {
+    @ObservedObject private var registry = AppEnvironmentRegistry.shared
+
+    var body: some View {
+        Group {
+            if let environment = registry.environment {
+                SettingsView(environment: environment)
+            } else {
+                ProgressView("Loading WebDock…")
+                    .frame(width: 420, height: 220)
+            }
         }
     }
 }

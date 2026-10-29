@@ -23,13 +23,13 @@ final class SyncMergeEngineTests: XCTestCase {
         )
 
         let merged = SyncMergeEngine.merge(
-            local: SyncSnapshot(
-                shortcuts: [SyncedShortcutRecord(old)],
+            local: CanonicalSnapshot(
+                shortcuts: [old],
                 groups: [],
                 generatedAt: Date(timeIntervalSince1970: 10)
             ),
-            remote: SyncSnapshot(
-                shortcuts: [SyncedShortcutRecord(newer)],
+            remote: CanonicalSnapshot(
+                shortcuts: [newer],
                 groups: [],
                 generatedAt: Date(timeIntervalSince1970: 20)
             )
@@ -47,8 +47,8 @@ final class SyncMergeEngineTests: XCTestCase {
             preferredBrowserFamily: .chrome,
             targetAccountEmail: "user@example.com"
         )
-        let snapshot = SyncSnapshot(
-            shortcuts: [SyncedShortcutRecord(shortcut)],
+        let snapshot = CanonicalSnapshot(
+            shortcuts: [shortcut],
             groups: [],
             generatedAt: Date()
         )
@@ -61,5 +61,28 @@ final class SyncMergeEngineTests: XCTestCase {
         XCTAssertTrue(text.contains("chrome"))
         XCTAssertFalse(text.contains("profileDirectory"))
         XCTAssertFalse(text.contains("Profile 12"))
+    }
+
+    func testTombstoneWinsWhenItIsNewer() {
+        let id = UUID()
+        let live = WebShortcut(
+            id: id,
+            displayName: "Live",
+            normalizedURLString: "https://example.com/",
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+        let deletedAt = Date(timeIntervalSince1970: 20)
+        let tombstone = WebShortcut(
+            id: id,
+            displayName: "Live",
+            normalizedURLString: "https://example.com/",
+            updatedAt: deletedAt,
+            deletedAt: deletedAt
+        )
+        let merged = SyncMergeEngine.merge(
+            local: CanonicalSnapshot(shortcuts: [live], groups: [], generatedAt: .distantPast),
+            remote: CanonicalSnapshot(shortcuts: [tombstone], groups: [], generatedAt: .distantFuture)
+        )
+        XCTAssertEqual(merged.shortcuts.first?.deletedAt, deletedAt)
     }
 }

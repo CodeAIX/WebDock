@@ -1,15 +1,19 @@
-import SwiftData
 import SwiftUI
 
 struct ManagerView: View {
     let environment: AppEnvironment
 
-    @Query(sort: \WebShortcut.sortIndex) private var allShortcuts: [WebShortcut]
+    @ObservedObject private var dataStore: WebDockDataStore
     @State private var selectedID: UUID?
     @State private var showNewShortcutSheet = false
 
+    init(environment: AppEnvironment) {
+        self.environment = environment
+        _dataStore = ObservedObject(wrappedValue: environment.dataStore)
+    }
+
     private var shortcuts: [WebShortcut] {
-        allShortcuts.filter { $0.deletedAt == nil }
+        dataStore.activeShortcuts
     }
 
     private var selectedShortcut: WebShortcut? {
@@ -41,10 +45,10 @@ struct ManagerView: View {
                 )
                 .id(shortcut.id)
             } else {
-                ContentUnavailableView(
-                    "Select a Shortcut",
+                WebDockEmptyStateView(
+                    title: "Select a Shortcut",
                     systemImage: "globe",
-                    description: Text("Choose a website launch rule to edit its browser and account settings.")
+                    message: "Choose a website launch rule to edit its browser and account settings."
                 )
             }
         }
@@ -68,7 +72,7 @@ struct ManagerView: View {
                 selectedID = shortcuts.first?.id
             }
         }
-        .onChange(of: shortcuts.map(\.id)) { _, ids in
+        .onChange(of: shortcuts.map(\.id)) { ids in
             if let selectedID, ids.contains(selectedID) { return }
             selectedID = ids.first
         }
@@ -128,6 +132,7 @@ private struct ShortcutEditorView: View {
     @State private var showDeleteConfirmation = false
     @State private var didSave = false
     @State private var resolutionRefresh = UUID()
+    @State private var accountAccessRefresh = UUID()
 
     init(
         shortcut: WebShortcut,
@@ -152,6 +157,7 @@ private struct ShortcutEditorView: View {
     }
 
     private var localAccounts: [BrowserAccountOption] {
+        _ = accountAccessRefresh
         guard let selectedFamily, selectedFamily.supportsAccountRouting else { return [] }
         return environment.browserCatalog.accounts(for: selectedFamily)
     }
@@ -200,7 +206,14 @@ private struct ShortcutEditorView: View {
 
                     Menu("Choose Local Account…") {
                         if localAccounts.isEmpty {
-                            Text("No signed-in accounts found on this Mac")
+                            Text("No signed-in accounts available")
+                            Button("Request Browser Account Access") {
+                                environment.browserCatalog.requestProfileAccess(for: selectedFamily)
+                                accountAccessRefresh = UUID()
+                            }
+                            Button("Open Privacy & Security") {
+                                environment.browserCatalog.openPrivacySettings()
+                            }
                         } else {
                             ForEach(localAccounts) { account in
                                 Button(account.displayLabel) {
@@ -210,7 +223,7 @@ private struct ShortcutEditorView: View {
                         }
                     }
 
-                    Text("Only the account email syncs. WebDock resolves that account to this Mac's local Profile directory at launch time.")
+                    Text("Only the account email is portable. WebDock resolves that account to this Mac's local Profile directory at launch time.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -289,12 +302,12 @@ private struct ShortcutEditorView: View {
         .padding(12)
         .navigationTitle(shortcut.displayName)
         .onAppear(perform: loadLocalOverride)
-        .onChange(of: browserSelection) { _, _ in
+        .onChange(of: browserSelection) { _ in
             if selectedFamily?.supportsAccountRouting != true {
                 accountEmail = ""
             }
         }
-        .onChange(of: localBrowserSelection) { _, _ in
+        .onChange(of: localBrowserSelection) { _ in
             localProfileSelection = Self.defaultLocalProfileToken
         }
         .confirmationDialog(
@@ -307,7 +320,7 @@ private struct ShortcutEditorView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The deletion is synchronized so the shortcut does not reappear on another device.")
+            Text("The deletion is preserved as a tombstone so a stale synchronized copy cannot bring it back.")
         }
         .alert(
             "WebDock",
@@ -324,18 +337,18 @@ private struct ShortcutEditorView: View {
 
     private func save() {
         do {
-            try environment.shortcutStore.updateMetadata(
+            let updated = try environment.shortcutStore.updateMetadata(
                 shortcut,
                 name: name,
                 normalizedURL: urlString,
                 browserFamily: selectedFamily,
                 targetAccountEmail: accountEmail
             )
-            _ = try environment.deviceBindingResolver.refreshBinding(for: shortcut)
-            name = shortcut.displayName
-            urlString = shortcut.normalizedURLString
-            browserSelection = shortcut.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken
-            accountEmail = shortcut.targetAccountEmail ?? ""
+            _ = try environment.deviceBindingResolver.refreshBinding(for: updated)
+            name = updated.displayName
+            urlString = updated.normalizedURLString
+            browserSelection = updated.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken
+            accountEmail = updated.targetAccountEmail ?? ""
             resolutionRefresh = UUID()
             didSave = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {

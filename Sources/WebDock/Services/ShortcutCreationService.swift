@@ -1,12 +1,11 @@
 import Foundation
-import SwiftData
 
 @MainActor
 final class ShortcutCreationService {
-    private let modelContainer: ModelContainer
+    private let dataStore: WebDockDataStore
 
-    init(modelContainer: ModelContainer) {
-        self.modelContainer = modelContainer
+    init(dataStore: WebDockDataStore) {
+        self.dataStore = dataStore
     }
 
     @discardableResult
@@ -27,19 +26,10 @@ final class ShortcutCreationService {
             normalizedURLString: url.absoluteString,
             preferredBrowserFamily: browserFamily,
             targetAccountEmail: accountEmail,
-            sortIndex: Date().timeIntervalSince1970
+            sortIndex: (dataStore.activeShortcuts.map(\.sortIndex).max() ?? -1) + 1
         )
-
-        let context = modelContainer.mainContext
-        do {
-            context.insert(shortcut)
-            try context.save()
-            NotificationCenter.default.post(name: .webDockCanonicalDataDidChange, object: nil)
-            return shortcut
-        } catch {
-            context.rollback()
-            throw error
-        }
+        try dataStore.insertShortcut(shortcut)
+        return shortcut
     }
 
     private func validatedURL(_ rawValue: String) throws -> URL {
@@ -58,9 +48,7 @@ final class ShortcutCreationService {
     private func resolvedName(_ proposedName: String, url: URL) -> String {
         let trimmed = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
-        return url.host(percentEncoded: false)
-            ?? url.host
-            ?? url.absoluteString
+        return url.host ?? url.absoluteString
     }
 }
 

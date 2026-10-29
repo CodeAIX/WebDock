@@ -6,32 +6,53 @@ Its core object is a **portable website launch rule** rather than a browser-expo
 
 `URL + preferred browser family + optional account email + name/group/order`
 
-On each Mac, WebDock resolves that portable intent to the browser and local profile available on that device. Chromium `Profile N` directory names are local implementation details and are never used as cross-device identity.
+Each Mac resolves that portable intent to its own installed browser and local profile. Chromium `Default` / `Profile N` directory names are machine-local implementation details and are never used as portable identity.
 
 ## Current product direction
 
 - Manual creation/editing is the primary workflow (`+` in Launcher and Manager).
-- `.crwebloc`, `.webloc`, and `.url` import is intentionally not supported.
+- `.crwebloc`, `.webloc`, and `.url` import is intentionally unsupported.
 - Chrome/Chromium-family accounts are matched between Macs by signed-in account email.
-- If a preferred account is missing, WebDock opens the preferred browser with its default profile and shows a warning.
-- If a preferred browser is missing, WebDock opens the system default browser and shows a warning.
-- Device-only browser/profile overrides never change the synced rule.
-- iCloud/CloudKit is the first sync provider; WebDAV is planned against the same provider-independent snapshot schema.
+- Missing account -> preferred browser default profile + warning.
+- Missing browser -> system default browser + warning.
+- Device-only browser/profile overrides never alter portable data.
+- Local canonical data uses human-readable Codable JSON, not SwiftData.
+- Automatic local snapshots and `.webdockbackup` export/restore are built in.
+- Cross-device sync providers are **Synced Folder** and **WebDAV**.
+- A Synced Folder may live in iCloud Drive, Dropbox, OneDrive, Syncthing, a NAS-mounted directory, or any other ordinary file-sync location. WebDock itself uses no Apple cloud service entitlement.
 
-## Privacy boundary
+## Browser account access
 
-WebDock may read browser profile metadata required to map an account email to a local profile directory. It does not need cookies, passwords, history, or page content.
+On newer macOS versions, the OS may require explicit Files & Folders permission before WebDock can read another browser's profile metadata. WebDock provides first-run guidance, per-browser Authorize/Rescan controls, and a shortcut to Privacy & Security. The system remains the authority that grants or revokes access.
+
+WebDock reads only profile metadata needed to identify account names/emails and local profile directories. It does not read browser cookies, saved passwords, browsing history, tokens, or page content.
+
+## Backup and synchronization
+
+Local storage:
+
+- `Canonical.json` — portable shortcuts/groups/tombstones
+- `DeviceBindings.json` — local browser/Profile resolution and overrides
+- `Backups/` — automatic/manual safety snapshots
+
+Portable `.webdockbackup` exports omit local Profile numbers and device overrides, so a backup restored on another Mac resolves account email to that Mac's own local profile.
+
+Synchronization always transports canonical data only:
+
+- **Synced Folder** -> `WebDockSync.json` in a user-selected folder
+- **WebDAV** -> `WebDockSync.json` with ETag / conditional-write conflict detection; password stored in macOS Keychain
 
 ## Technology
 
-- macOS 14+
+- macOS 13 Ventura or later
+- Universal binary: arm64 + x86_64
 - Swift + SwiftUI + AppKit
-- SwiftData for local canonical data and device bindings
-- CloudKit private database for portable sync snapshots
+- Codable JSON persistence
 - `NSWorkspace` for external browser launches
 - no Electron/Tauri
 - no embedded browser/WebView
 - no private Dock APIs or Accessibility hacks
+- no Apple cloud entitlement
 
 ## Architecture docs
 

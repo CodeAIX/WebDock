@@ -17,7 +17,6 @@ final class ManagerWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
 
         let root = ManagerView(environment: environment)
-            .modelContainer(environment.modelContainer)
         window.contentView = NSHostingView(rootView: root)
 
         super.init(window: window)

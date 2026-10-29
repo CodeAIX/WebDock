@@ -1,56 +1,60 @@
 # WebDock Smoke Build
 
-The `macOS Smoke Build` GitHub Actions workflow produces a downloadable `WebDock-smoke-macos.zip` for interactive testing on a real Mac.
+The `macOS Smoke Build` workflow produces `WebDock-smoke-macos.zip` for interactive testing on real Macs.
 
-## What this build is
+## Build contract
 
 - Release configuration.
-- Built on GitHub's macOS runner from the exact repository commit.
-- Ad-hoc signed so the app bundle has a coherent local-test code signature.
-- Packaged with `ditto` to preserve macOS bundle/resource metadata.
-- Includes a SHA-256 checksum next to the ZIP.
-- Intentionally signed **without restricted iCloud/CloudKit entitlements**.
+- Deployment target macOS 13.0.
+- Universal executable containing arm64 and x86_64 slices.
+- Ad-hoc signed without restricted entitlements.
+- Packaged with `ditto` to preserve bundle metadata.
+- SHA-256 checksum included.
+- Built from the exact repository commit.
+
+WebDock has no Apple cloud entitlement/provider. Synced Folder and WebDAV work without paid Apple developer capabilities.
 
 ## What this build is not
 
-It is **not** signed with an Apple Developer ID/development certificate, does not contain a provisioning profile, and is **not notarized by Apple**. It is a local smoke-test artifact, not the final distributable release.
+It is not Developer ID signed and is not notarized. First launch may therefore require Finder **Open** and/or System Settings > Privacy & Security > Open Anyway. Do not disable Gatekeeper system-wide.
 
-Because iCloud/CloudKit is a restricted macOS entitlement that must be authorized by a provisioning profile, the smoke artifact must not claim the production CloudKit entitlement. iCloud sync therefore reports itself as unavailable in this build. A properly provisioned Apple-signed build is required for real CloudKit testing.
-
-## Install for testing
-
-1. Open the successful `macOS Smoke Build` workflow run in GitHub Actions.
-2. Download the `WebDock-smoke-macos` artifact.
-3. Extract `WebDock-smoke-macos.zip`.
-4. Move `WebDock.app` to `/Applications` or `~/Applications`.
-5. On first launch, use Finder's **Open** command from the context menu if macOS warns that the developer cannot be verified.
-6. If macOS still blocks the app, use **System Settings → Privacy & Security → Open Anyway** for WebDock.
-
-Do not disable Gatekeeper system-wide.
+Because browser profile metadata may be protected by macOS, browser-account access is a separate OS permission concern from code signing. WebDock can initiate the access request but the user controls the Files & Folders switch.
 
 ## Interactive acceptance
 
-At minimum verify:
+### Both architectures
+- cold launch shows Launcher;
+- Dock click show/hide/reactivation remains correct;
+- Launcher/Manager manual create works;
+- edit/delete/reorder persist after relaunch;
+- Browser Family + Account Email persist;
+- matching Chromium account resolves to correct local Profile;
+- missing account/browser warnings and fallback work;
+- local overrides stay local.
 
-- cold launch shows the Launcher panel;
-- clicking the running WebDock Dock icon toggles the panel;
-- a shortcut can be created manually from the Launcher or Manager;
-- Browser Family and Account Email persist after relaunch;
-- a matching Chromium account resolves to the correct local profile;
-- a missing account shows a warning but still opens in the selected browser's default profile;
-- a missing browser falls back to the system default browser with a warning;
-- this-Mac browser/profile overrides do not change the synced launch rule;
-- grid drag-reorder persists after relaunch;
-- deleting a shortcut creates a tombstone and it does not return after relaunch;
-- selecting iCloud in this ad-hoc smoke build reports sync as unavailable rather than crashing or preventing app launch.
+### Browser access UX
+- first-run Browser Account Access sheet appears;
+- Authorize/Rescan attempts browser metadata access;
+- Settings shows access state;
+- Open Privacy & Security opens the relevant System Settings area as closely as supported by that macOS release.
 
-## Final distribution later
+### Backup
+- Back Up Now creates a local `.webdockbackup` snapshot;
+- Export Portable Backup creates a portable file;
+- portable file contains account email but no local Profile N;
+- Replace and Merge restore both work;
+- pre-restore backup is created.
 
-A production release should replace ad-hoc signing with:
+### Sync
+- Synced Folder writes/reads `WebDockSync.json`;
+- WebDAV credentials are saved in Keychain;
+- Sync Now reports success/failure without corrupting local data;
+- two Macs may map the same account email to different Profile directories.
 
-1. an Apple Developer signing identity;
-2. an App ID / provisioning profile that authorizes the CloudKit capability;
-3. the `iCloud.io.github.codeaix.WebDock` container entitlement;
-4. hardened-runtime verification;
-5. Apple notarization and stapling where applicable;
-6. a signed/notarized ZIP or DMG release artifact.
+### Intel Ventura gate
+
+On the designated Intel macOS 13.6.9 machine verify launch, create/edit/reorder, browser routing, backup/restore, and at least one synchronization provider.
+
+## Distribution later
+
+Developer ID signing/notarization remains desirable for smoother Gatekeeper behavior, but it is not a functional requirement for WebDock backup or synchronization. Synced Folder and WebDAV require no Apple cloud entitlement.

@@ -1,37 +1,39 @@
 import Foundation
-import SwiftData
 
 @MainActor
 final class ShortcutStore {
-    private let modelContainer: ModelContainer
+    private let dataStore: WebDockDataStore
 
-    init(modelContainer: ModelContainer) {
-        self.modelContainer = modelContainer
+    init(dataStore: WebDockDataStore) {
+        self.dataStore = dataStore
     }
 
+    @discardableResult
     func updateMetadata(
         _ shortcut: WebShortcut,
         name proposedName: String,
         normalizedURL rawURL: String,
         browserFamily: BrowserFamily?,
         targetAccountEmail: String?
-    ) throws {
+    ) throws -> WebShortcut {
         let name = try validatedName(proposedName)
         let url = try validatedURL(rawURL)
         let email = browserFamily?.supportsAccountRouting == true
             ? normalizeAccountEmail(targetAccountEmail)
             : nil
 
-        shortcut.displayName = name
-        shortcut.normalizedURLString = url.absoluteString
-        shortcut.preferredBrowserFamily = browserFamily
-        shortcut.targetAccountEmail = email
-        shortcut.updatedAt = Date()
-        try saveCanonicalChanges()
+        var updated = shortcut
+        updated.displayName = name
+        updated.normalizedURLString = url.absoluteString
+        updated.preferredBrowserFamily = browserFamily
+        updated.targetAccountEmail = email
+        updated.updatedAt = Date()
+        try dataStore.updateShortcut(updated)
+        return updated
     }
 
     func move(shortcutID: UUID, before targetID: UUID?) throws {
-        var shortcuts = try orderedActiveShortcuts()
+        var shortcuts = dataStore.activeShortcuts
         guard let sourceIndex = shortcuts.firstIndex(where: { $0.id == shortcutID }) else {
             throw ShortcutStoreError.shortcutNotFound
         }
@@ -50,7 +52,7 @@ final class ShortcutStore {
     }
 
     func moveForDrop(shortcutID: UUID, onto targetID: UUID) throws {
-        var shortcuts = try orderedActiveShortcuts()
+        var shortcuts = dataStore.activeShortcuts
         guard let sourceIndex = shortcuts.firstIndex(where: { $0.id == shortcutID }),
               let originalTargetIndex = shortcuts.firstIndex(where: { $0.id == targetID }) else {
             throw ShortcutStoreError.shortcutNotFound
@@ -66,30 +68,19 @@ final class ShortcutStore {
         try persistOrder(shortcuts)
     }
 
-    /// Canonical deletions are tombstoned so another offline Mac cannot revive
-    /// a stale copy on its next synchronization.
+    /// Canonical deletions remain tombstones so a stale synced copy cannot
+    /// resurrect a record when Synced Folder or WebDAV merges later.
     func delete(_ shortcut: WebShortcut) throws {
+        var updated = shortcut
         let now = Date()
-        shortcut.deletedAt = now
-        shortcut.updatedAt = now
-
-        let shortcutID = shortcut.id
-        let bindingDescriptor = FetchDescriptor<DeviceShortcutBinding>(
-            predicate: #Predicate<DeviceShortcutBinding> { binding in
-                binding.shortcutID == shortcutID
-            }
-        )
-        if let binding = try modelContainer.mainContext.fetch(bindingDescriptor).first {
-            modelContainer.mainContext.delete(binding)
-        }
-        try saveCanonicalChanges()
+        updated.deletedAt = now
+        updated.updatedAt = now
+        try dataStore.updateShortcut(updated)
+        try dataStore.removeDeviceBinding(for: shortcut.id)
     }
 
-    func orderedActiveShortcuts() throws -> [WebShortcut] {
-        try modelContainer.mainContext.fetch(
-            FetchDescriptor<WebShortcut>(sortBy: [SortDescriptor(\WebShortcut.sortIndex)])
-        )
-        .filter { $0.deletedAt == nil }
+    func orderedActiveShortcuts() -> [WebShortcut] {
+        dataStore.activeShortcuts
     }
 
     private func validatedName(_ proposedName: String) throws -> String {
@@ -112,21 +103,13 @@ final class ShortcutStore {
 
     private func persistOrder(_ shortcuts: [WebShortcut]) throws {
         let now = Date()
-        for (index, shortcut) in shortcuts.enumerated() {
-            shortcut.sortIndex = Double(index)
-            shortcut.updatedAt = now
+        let reordered = shortcuts.enumerated().map { index, shortcut -> WebShortcut in
+            var updated = shortcut
+            updated.sortIndex = Double(index)
+            updated.updatedAt = now
+            return updated
         }
-        try saveCanonicalChanges()
-    }
-
-    private func saveCanonicalChanges() throws {
-        do {
-            try modelContainer.mainContext.save()
-            NotificationCenter.default.post(name: .webDockCanonicalDataDidChange, object: nil)
-        } catch {
-            modelContainer.mainContext.rollback()
-            throw error
-        }
+        try dataStore.replaceShortcutOrder(reordered)
     }
 }
 
