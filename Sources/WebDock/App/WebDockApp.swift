@@ -9,6 +9,14 @@ struct WebDockApp: App {
         Settings {
             SettingsRootView()
         }
+        .commands {
+            CommandGroup(after: .windowArrangement) {
+                Button("Open Launcher") { appDelegate.openLauncher() }
+                    .keyboardShortcut("1")
+                Button("Open Library") { appDelegate.openLibrary() }
+                    .keyboardShortcut("2")
+            }
+        }
     }
 }
 

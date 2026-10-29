@@ -98,18 +98,23 @@ private struct ShortcutReorderDropDelegate: DropDelegate {
 struct LauncherView: View {
     let environment: AppEnvironment
     let onOpenManager: () -> Void
+    let onPrepareSettings: () -> Void
 
     @ObservedObject private var dataStore: WebDockDataStore
     @AppStorage("WebDock.browserAccessOnboardingShown") private var onboardingShown = false
+    @AppStorage("WebDock.launcherSidebarVisible") private var sidebarVisible = true
+    @State private var selectedGroupID: UUID?
+    @FocusState private var searchFocused: Bool
     @State private var searchText = ""
     @State private var errorMessage: String?
     @State private var draggedShortcutID: UUID?
     @State private var showNewShortcutSheet = false
     @State private var showBrowserAccessOnboarding = false
 
-    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void) {
+    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void, onPrepareSettings: @escaping () -> Void) {
         self.environment = environment
         self.onOpenManager = onOpenManager
+        self.onPrepareSettings = onPrepareSettings
         _dataStore = ObservedObject(wrappedValue: environment.dataStore)
     }
 
@@ -118,89 +123,127 @@ struct LauncherView: View {
     }
 
     private var filtered: [WebShortcut] {
-        guard !searchText.isEmpty else { return shortcuts }
-        return shortcuts.filter {
-            $0.displayName.localizedCaseInsensitiveContains(searchText)
-            || $0.normalizedURLString.localizedCaseInsensitiveContains(searchText)
-            || ($0.targetAccountEmail?.localizedCaseInsensitiveContains(searchText) ?? false)
-            || ($0.preferredBrowserFamily?.displayName.localizedCaseInsensitiveContains(searchText) ?? false)
+        let scoped = shortcuts.filter { selectedGroupID == nil || $0.groupID == selectedGroupID }
+        guard !searchText.isEmpty else { return scoped }
+        return scoped.filter { shortcut in
+            shortcut.displayName.localizedCaseInsensitiveContains(searchText)
+            || shortcut.normalizedURLString.localizedCaseInsensitiveContains(searchText)
+            || (shortcut.targetAccountEmail?.localizedCaseInsensitiveContains(searchText) ?? false)
+            || (shortcut.preferredBrowserFamily?.displayName.localizedCaseInsensitiveContains(searchText) ?? false)
+            || dataStore.activeGroups.contains { $0.id == shortcut.groupID && $0.name.localizedCaseInsensitiveContains(searchText) }
         }
+    }
+
+    private var canReorder: Bool { searchText.isEmpty && selectedGroupID == nil }
+
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            Button { sidebarVisible.toggle() } label: {
+                Image(systemName: "sidebar.left")
+            }
+            .help("Toggle sidebar")
+            .accessibilityLabel("Toggle sidebar")
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search websites", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .accessibilityIdentifier("launcher.search")
+                    .onSubmit { if filtered.count == 1, let shortcut = filtered.first { launch(shortcut) } }
+            }
+            .padding(10)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+            Button { showNewShortcutSheet = true } label: { Image(systemName: "plus") }
+                .keyboardShortcut("n")
+                .help("New shortcut (⌘N)")
+                .accessibilityLabel("New shortcut")
+            Button(action: onOpenManager) { Image(systemName: "rectangle.grid.1x2") }
+                .help("Manage shortcuts (⌘2)")
+                .accessibilityLabel("Manage shortcuts")
+            settingsButton
+            Button { searchFocused = true } label: { EmptyView() }
+                .keyboardShortcut("f")
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .buttonStyle(.borderless)
+        .font(.system(size: 16))
+        .padding(.horizontal, 20)
+        .frame(height: 68)
+    }
+
+    @ViewBuilder private var settingsButton: some View {
+        if #available(macOS 14.0, *) {
+            LauncherSettingsButton(onPrepareSettings: onPrepareSettings)
+                .keyboardShortcut(",")
+                .help("Settings (⌘,)")
+                .accessibilityLabel("Settings")
+        } else {
+            Button {
+                onPrepareSettings()
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } label: { Image(systemName: "gearshape") }
+            .keyboardShortcut(",")
+            .help("Settings (⌘,)")
+            .accessibilityLabel("Settings")
+        }
+    }
+
+    private var sidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Library").font(.caption).foregroundStyle(.secondary).padding(8)
+                sidebarRow("All Shortcuts", icon: "square.grid.2x2", groupID: nil)
+                if !dataStore.activeGroups.isEmpty {
+                    Text("Groups").font(.caption).foregroundStyle(.secondary).padding(8)
+                    ForEach(dataStore.activeGroups) { group in
+                        sidebarRow(group.name, icon: "folder", groupID: group.id)
+                    }
+                }
+            }
+            .padding(12)
+        }
+        .frame(width: 200)
+        .frame(maxHeight: .infinity)
+        .background(Color.primary.opacity(0.025))
+    }
+
+    private func sidebarRow(_ title: String, icon: String, groupID: UUID?) -> some View {
+        Button { selectedGroupID = groupID } label: {
+            Label(title, systemImage: icon)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(selectedGroupID == groupID ? Color.accentColor.opacity(0.16) : .clear,
+                            in: RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selectedGroupID == groupID ? .isSelected : [])
     }
 
     var body: some View {
         ZStack {
             VisualEffectView()
-            VStack(spacing: 16) {
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search websites", text: $searchText)
-                        .textFieldStyle(.plain)
-                    Button {
-                        showNewShortcutSheet = true
-                    } label: {
-                        Image(systemName: "plus")
+            VStack(spacing: 0) {
+                topBar
+                Divider()
+                HStack(spacing: 0) {
+                    if sidebarVisible {
+                        sidebar
+                        Divider()
                     }
-                    .buttonStyle(.borderless)
-                    .help("New shortcut")
-                    Button(action: onOpenManager) {
-                        Image(systemName: "slider.horizontal.3")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Manage shortcuts")
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                if filtered.isEmpty {
-                    WebDockEmptyStateView(
-                        title: "No Shortcuts",
-                        systemImage: "globe",
-                        message: searchText.isEmpty
-                            ? "Click + to create your first website launch rule."
-                            : "No shortcuts match your search."
-                    )
-                } else {
-                    ScrollView {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 92, maximum: 110), spacing: 12)],
-                            spacing: 16
-                        ) {
-                            ForEach(filtered, id: \.id) { shortcut in
-                                let resolution = environment.deviceBindingResolver.resolution(for: shortcut)
-                                ShortcutTileView(
-                                    shortcut: shortcut,
-                                    resolution: resolution
-                                ) {
-                                    launch(shortcut)
-                                }
-                                .opacity(draggedShortcutID == shortcut.id ? 0.55 : 1)
-                                .onDrag {
-                                    guard searchText.isEmpty else {
-                                        return NSItemProvider()
-                                    }
-                                    draggedShortcutID = shortcut.id
-                                    return NSItemProvider(object: shortcut.id.uuidString as NSString)
-                                }
-                                .onDrop(
-                                    of: [UTType.plainText],
-                                    delegate: ShortcutReorderDropDelegate(
-                                        targetID: shortcut.id,
-                                        canReorder: searchText.isEmpty,
-                                        draggedShortcutID: $draggedShortcutID,
-                                        performMove: moveShortcut
-                                    )
-                                )
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
+                    grid
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(20)
                 }
             }
-            .padding(20)
         }
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .onChange(of: dataStore.activeGroups) { groups in
+            if let selectedGroupID, !groups.contains(where: { $0.id == selectedGroupID }) {
+                self.selectedGroupID = nil
+            }
+        }
         .sheet(isPresented: $showNewShortcutSheet) {
             NewShortcutSheet(environment: environment)
         }
@@ -228,6 +271,53 @@ struct LauncherView: View {
         }
     }
 
+    @ViewBuilder private var grid: some View {
+        if filtered.isEmpty {
+            WebDockEmptyStateView(
+                title: "No Shortcuts",
+                systemImage: "globe",
+                message: searchText.isEmpty && selectedGroupID == nil
+                    ? "Click + to create your first website launch rule."
+                    : "No shortcuts match your search."
+            )
+        } else {
+            ScrollView {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 92, maximum: 110), spacing: 12)],
+                    spacing: 16
+                ) {
+                    ForEach(filtered, id: \.id) { shortcut in
+                        let resolution = environment.deviceBindingResolver.resolution(for: shortcut)
+                        ShortcutTileView(
+                            shortcut: shortcut,
+                            resolution: resolution
+                        ) {
+                            launch(shortcut)
+                        }
+                        .opacity(draggedShortcutID == shortcut.id ? 0.55 : 1)
+                        .onDrag {
+                            guard canReorder else {
+                                return NSItemProvider()
+                            }
+                            draggedShortcutID = shortcut.id
+                            return NSItemProvider(object: shortcut.id.uuidString as NSString)
+                        }
+                        .onDrop(
+                            of: [UTType.plainText],
+                            delegate: ShortcutReorderDropDelegate(
+                                targetID: shortcut.id,
+                                canReorder: canReorder,
+                                draggedShortcutID: $draggedShortcutID,
+                                performMove: moveShortcut
+                            )
+                        )
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
     private func launch(_ shortcut: WebShortcut) {
         do {
             let resolution = try environment.deviceBindingResolver.refreshBinding(for: shortcut)
@@ -250,5 +340,18 @@ struct LauncherView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+@available(macOS 14.0, *)
+private struct LauncherSettingsButton: View {
+    @Environment(\.openSettings) private var openSettings
+    let onPrepareSettings: () -> Void
+
+    var body: some View {
+        Button {
+            onPrepareSettings()
+            openSettings()
+        } label: { Image(systemName: "gearshape") }
     }
 }

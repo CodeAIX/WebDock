@@ -14,8 +14,8 @@ final class LauncherPanelController: NSWindowController {
         window?.isVisible == true
     }
 
-    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void) {
-        let size = NSSize(width: 600, height: 420)
+    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void, onPrepareSettings: @escaping () -> Void) {
+        let size = NSSize(width: 780, height: 520)
         let panel = LauncherPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .fullSizeContentView],
@@ -32,7 +32,8 @@ final class LauncherPanelController: NSWindowController {
 
         let root = LauncherView(
             environment: environment,
-            onOpenManager: onOpenManager
+            onOpenManager: onOpenManager,
+            onPrepareSettings: onPrepareSettings
         )
         panel.contentView = NSHostingView(rootView: root)
 

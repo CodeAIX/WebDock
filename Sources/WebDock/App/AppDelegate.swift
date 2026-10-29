@@ -49,6 +49,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    func openLauncher() {
+        launcherVisibilityState.cancelPendingShow()
+        launcherPanelController?.showNearDock()
+    }
+
+    func openLibrary() {
+        launcherVisibilityState.cancelPendingShow()
+        launcherPanelController?.hide()
+        managerWindowController?.showManager()
+    }
+
     private func servicePendingLauncherShowOnNextRunLoop() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -81,9 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcherPanelController = LauncherPanelController(
             environment: environment,
             onOpenManager: { [weak self] in
+                self?.openLibrary()
+            },
+            onPrepareSettings: { [weak self] in
                 self?.launcherVisibilityState.cancelPendingShow()
                 self?.launcherPanelController?.hide()
-                self?.managerWindowController?.showManager()
             }
         )
     }

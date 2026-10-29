@@ -150,10 +150,16 @@ User selects an ordinary folder. WebDock reads/writes `WebDockSync.json`. The fo
 
 ## 10. UI
 
-Launcher:
+Launcher (UI-1):
+- fixed full-width content top bar, independent of sidebar visibility;
+- persistent local sidebar visibility, initially shown, with All Shortcuts and existing groups;
+- direct Settings and Library actions;
+- ⌘N new shortcut, ⌘F search, ⌘, settings, ⌘1 Launcher, ⌘2 Library;
+- Return launches a single matching result;
+- search includes group names;
 - search;
 - `+` creation;
-- persistent drag reorder;
+- persistent drag reorder in the unfiltered All Shortcuts view;
 - subtle warning badge;
 - click launch with fallback.
 
