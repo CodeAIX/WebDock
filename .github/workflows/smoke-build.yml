@@ -1,0 +1,82 @@
+name: macOS Smoke Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'chore/**'
+
+permissions:
+  contents: read
+
+jobs:
+  package-smoke-app:
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          brew install xcodegen
+
+      - name: Validate LaunchServices contract
+        run: |
+          plutil -lint Config/Info.plist
+          python3 scripts/validate_document_types.py
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Build Release app
+        env:
+          DERIVED_DATA: ${{ runner.temp }}/WebDockDerivedData
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project WebDock.xcodeproj \
+            -scheme WebDock \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build
+
+          APP="$DERIVED_DATA/Build/Products/Release/WebDock.app"
+          test -d "$APP"
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+
+      - name: Ad-hoc sign and verify bundle
+        run: |
+          set -euo pipefail
+          codesign --force --deep --sign - --timestamp=none "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign -dv --verbose=2 "$APP_PATH" 2>&1
+          plutil -lint "$APP_PATH/Contents/Info.plist"
+
+      - name: Package app
+        env:
+          OUTPUT_DIR: ${{ runner.temp }}/WebDockSmoke
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          ZIP="$OUTPUT_DIR/WebDock-smoke-macos.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP"
+          shasum -a 256 "$ZIP" | tee "$OUTPUT_DIR/WebDock-smoke-macos.zip.sha256"
+          unzip -t "$ZIP"
+
+      - name: Upload smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebDock-smoke-macos
+          path: |
+            ${{ runner.temp }}/WebDockSmoke/WebDock-smoke-macos.zip
+            ${{ runner.temp }}/WebDockSmoke/WebDock-smoke-macos.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
