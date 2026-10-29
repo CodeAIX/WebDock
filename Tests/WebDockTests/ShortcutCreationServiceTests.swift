@@ -1,12 +1,12 @@
-import SwiftData
 import XCTest
 @testable import WebDock
 
 final class ShortcutCreationServiceTests: XCTestCase {
     @MainActor
     func testCreatesPortableChromeAccountRule() throws {
-        let container = try makeContainer()
-        let service = ShortcutCreationService(modelContainer: container)
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let service = ShortcutCreationService(dataStore: store)
 
         let shortcut = try service.create(
             name: "ChatGPT",
@@ -18,12 +18,14 @@ final class ShortcutCreationServiceTests: XCTestCase {
         XCTAssertEqual(shortcut.preferredBrowserFamily, .chrome)
         XCTAssertEqual(shortcut.targetAccountEmail, "user@example.com")
         XCTAssertEqual(shortcut.normalizedURLString, "https://chatgpt.com/")
+        XCTAssertEqual(store.activeShortcuts.map(\.id), [shortcut.id])
     }
 
     @MainActor
     func testDefaultBrowserDropsAccountIdentity() throws {
-        let container = try makeContainer()
-        let service = ShortcutCreationService(modelContainer: container)
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let service = ShortcutCreationService(dataStore: store)
 
         let shortcut = try service.create(
             name: "",
@@ -38,13 +40,9 @@ final class ShortcutCreationServiceTests: XCTestCase {
     }
 
     @MainActor
-    private func makeContainer() throws -> ModelContainer {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try ModelContainer(
-            for: WebShortcut.self,
-            ShortcutGroup.self,
-            DeviceShortcutBinding.self,
-            configurations: configuration
-        )
+    private func makeStore() throws -> (WebDockDataStore, URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WebDockCreationTests-\(UUID().uuidString)", isDirectory: true)
+        return (try WebDockDataStore(rootURL: root), root)
     }
 }
