@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct WebDockEmptyStateView: View {
+    @ObservedObject private var language = AppLanguage.shared
     let title: String
     let systemImage: String
     let message: String
@@ -10,9 +11,9 @@ struct WebDockEmptyStateView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 34, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.headline)
-            Text(message)
+            Text(L10n.message(message))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

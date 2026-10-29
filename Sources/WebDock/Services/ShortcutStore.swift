@@ -161,11 +161,11 @@ enum ShortcutStoreError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .emptyName:
-            "Shortcut names cannot be empty."
+            L10n.tr("Shortcut names cannot be empty.")
         case .invalidURL:
-            "Enter a valid HTTP or HTTPS URL."
+            L10n.tr("Enter a valid HTTP or HTTPS URL.")
         case .shortcutNotFound:
-            "The shortcut could not be found."
+            L10n.tr("The shortcut could not be found.")
         }
     }
 }

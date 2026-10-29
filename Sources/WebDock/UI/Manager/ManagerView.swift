@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct ManagerView: View {
+    @ObservedObject private var language = AppLanguage.shared
     let environment: AppEnvironment
 
     @ObservedObject private var navigation: LibraryNavigation
@@ -38,12 +39,12 @@ struct ManagerView: View {
         HStack(spacing: 0) {
             VStack(spacing: 10) {
                 HStack {
-                    TextField("Search library", text: $searchText)
+                    TextField(L10n.tr("Search library"), text: $searchText)
                     Button { showNewShortcutSheet = true } label: { Image(systemName: "plus") }
-                        .keyboardShortcut("n").help("New Shortcut")
+                        .keyboardShortcut("n").help(L10n.tr("New Shortcut"))
                 }.padding(.horizontal, 12).padding(.top, 12)
-                Picker("Group", selection: $groupFilter) {
-                    Text("All Shortcuts").tag(nil as UUID?)
+                Picker(L10n.tr("Group"), selection: $groupFilter) {
+                    Text(L10n.tr("All Shortcuts")).tag(nil as UUID?)
                     ForEach(dataStore.activeGroups) { Text($0.name).tag(Optional($0.id)) }
                 }.padding(.horizontal, 12)
             List(selection: Binding(get: { selectedID }, set: requestSelection)) {
@@ -55,8 +56,8 @@ struct ManagerView: View {
                     )
                     .tag(shortcut.id)
                     .contextMenu {
-                        Button("Move Up") { reorder(shortcut, offset: -1) }
-                        Button("Move Down") { reorder(shortcut, offset: 1) }
+                        Button(L10n.tr("Move Up")) { reorder(shortcut, offset: -1) }
+                        Button(L10n.tr("Move Down")) { reorder(shortcut, offset: 1) }
                     }
                 }
             }
@@ -77,9 +78,9 @@ struct ManagerView: View {
                 .id(shortcut.id)
             } else {
                 WebDockEmptyStateView(
-                    title: "Select a Shortcut",
+                    title: L10n.tr("Select a Shortcut"),
                     systemImage: "globe",
-                    message: "Choose a website launch rule to edit its browser and account settings."
+                    message: L10n.tr("Choose a website launch rule to edit its browser and account settings.")
                 )
             }
             }
@@ -98,11 +99,11 @@ struct ManagerView: View {
             searchText = ""; groupFilter = nil
             requestSelection(id)
         }
-        .confirmationDialog("Discard unsaved changes?", isPresented: $showDiscardChanges, titleVisibility: .visible) {
-            Button("Discard Changes", role: .destructive) {
+        .confirmationDialog(L10n.tr("Discard unsaved changes?"), isPresented: $showDiscardChanges, titleVisibility: .visible) {
+            Button(L10n.tr("Discard Changes"), role: .destructive) {
                 editorHasChanges = false; selectedID = pendingSelection; pendingSelection = nil
             }
-            Button("Keep Editing", role: .cancel) { pendingSelection = nil }
+            Button(L10n.tr("Keep Editing"), role: .cancel) { pendingSelection = nil }
         }
         .onChange(of: dataStore.activeShortcuts.map(\.id)) { ids in
             if let selectedID, ids.contains(selectedID) { return }
@@ -126,6 +127,7 @@ struct ManagerView: View {
 }
 
 private struct ManagerShortcutRow: View {
+    @ObservedObject private var language = AppLanguage.shared
     let shortcut: WebShortcut
     let resolution: ShortcutResolution
     let iconService: ShortcutIconService
@@ -148,6 +150,7 @@ private struct ManagerShortcutRow: View {
 }
 
 private struct ShortcutEditorView: View {
+    @ObservedObject private var language = AppLanguage.shared
     private static let defaultBrowserToken = "__WEBDOCK_DEFAULT_BROWSER__"
     private static let automaticLocalBrowserToken = "__WEBDOCK_AUTOMATIC_LOCAL_BROWSER__"
     private static let defaultLocalProfileToken = "__WEBDOCK_LOCAL_BROWSER_DEFAULT__"
@@ -231,37 +234,37 @@ private struct ShortcutEditorView: View {
     var body: some View {
         ScrollView {
           VStack(alignment: .leading, spacing: 16) {
-            WebDockCard(title: "Shortcut") {
+            WebDockCard(title: L10n.tr("Shortcut")) {
                 HStack(spacing: 16) {
                     WebsiteIconView(shortcut: currentShortcut, resolution: resolution, service: environment.iconService)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(currentShortcut.iconMode == "custom" ? "Custom Icon" : "Automatic Icon").font(.caption).foregroundStyle(.secondary)
+                        Text(currentShortcut.iconMode == "custom" ? L10n.tr("Custom Icon") : L10n.tr("Automatic Icon")).font(.caption).foregroundStyle(.secondary)
                         HStack {
-                            Button("Choose Icon…") {
+                            Button(L10n.tr("Choose Icon…")) {
                                 do { try environment.iconService.chooseIcon(for: currentShortcut) }
-                                catch { errorMessage = error.localizedDescription }
+                                catch { errorMessage = L10n.errorDescription(error) }
                             }
-                            Button("Reset") {
+                            Button(L10n.tr("Reset")) {
                                 do { try environment.iconService.reset(currentShortcut) }
-                                catch { errorMessage = error.localizedDescription }
+                                catch { errorMessage = L10n.errorDescription(error) }
                             }
-                            Button("Refresh") { Task { await environment.iconService.loadIfNeeded(currentShortcut, force: true) } }
+                            Button(L10n.tr("Refresh")) { Task { await environment.iconService.loadIfNeeded(currentShortcut, force: true) } }
                                 .disabled(currentShortcut.iconMode == "custom")
                         }
                     }
                 }.padding(.bottom, 6)
-                TextField("Name", text: $name)
-                TextField("URL", text: $urlString)
-                Picker("Group", selection: $groupID) {
-                    Text("None").tag(nil as UUID?)
+                TextField(L10n.tr("Name"), text: $name)
+                TextField(L10n.tr("URL"), text: $urlString)
+                Picker(L10n.tr("Group"), selection: $groupID) {
+                    Text(L10n.tr("None")).tag(nil as UUID?)
                     ForEach(environment.dataStore.activeGroups) { Text($0.name).tag(Optional($0.id)) }
                 }
-                Button("New Group…") { showNewGroup = true }
+                Button(L10n.tr("New Group…")) { showNewGroup = true }
             }
 
-            WebDockCard(title: "Launch Rule") {
-                Picker("Browser", selection: $browserSelection) {
-                    Text("System Default Browser")
+            WebDockCard(title: L10n.tr("Launch Rule")) {
+                Picker(L10n.tr("Browser"), selection: $browserSelection) {
+                    Text(L10n.tr("System Default Browser"))
                         .tag(Self.defaultBrowserToken)
                     ForEach(BrowserFamily.allCases) { family in
                         Text(family.displayName)
@@ -274,33 +277,33 @@ private struct ShortcutEditorView: View {
                         environment.browserCatalog.requestProfileAccess(for: selectedFamily)
                         accountAccessRefresh = UUID()
                     }
-                    Text("Account mapping is resolved separately on each Mac.")
+                    Text(L10n.tr("Account mapping is resolved separately on each Mac."))
                         .font(.caption).foregroundStyle(.secondary)
 
                 }
             }
 
-            WebDockCard(title: "This Mac") {
-                LabeledContent("Current Resolution") {
+            WebDockCard(title: L10n.tr("This Mac")) {
+                LabeledContent(L10n.tr("Current Resolution")) {
                     Text(resolution.summary)
                         .foregroundStyle(.secondary)
                 }
 
                 if let warning = resolution.warningMessage {
-                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    Label(L10n.message(warning), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.yellow)
                         .font(.caption)
                 } else if resolution.usesLocalOverride {
-                    Label("A device-only override is active. It does not sync to other Macs.", systemImage: "desktopcomputer")
+                    Label(L10n.tr("A device-only override is active. It does not sync to other Macs."), systemImage: "desktopcomputer")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("Browser Override", selection: Binding(
+                Picker(L10n.tr("Browser Override"), selection: Binding(
                     get: { localBrowserSelection },
                     set: { localBrowserSelection = $0; localProfileSelection = Self.defaultLocalProfileToken }
                 )) {
-                    Text("Automatic from synced rule")
+                    Text(L10n.tr("Automatic from synced rule"))
                         .tag(Self.automaticLocalBrowserToken)
                     ForEach(installedBrowsers) { browser in
                         Text(browser.displayName)
@@ -309,8 +312,8 @@ private struct ShortcutEditorView: View {
                 }
 
                 if let selectedLocalBrowser, selectedLocalBrowser.supportsProfiles {
-                    Picker("Profile Override", selection: $localProfileSelection) {
-                        Text("Browser Default / Last Used")
+                    Picker(L10n.tr("Profile Override"), selection: $localProfileSelection) {
+                        Text(L10n.tr("Browser Default / Last Used"))
                             .tag(Self.defaultLocalProfileToken)
                         ForEach(localProfiles) { profile in
                             Text(profile.displayLabel)
@@ -320,42 +323,42 @@ private struct ShortcutEditorView: View {
                 }
 
                 HStack {
-                    Button("Save Local Override") {
+                    Button(L10n.tr("Save Local Override")) {
                         applyLocalOverride()
                     }.disabled(!localOverrideChanged)
                     if hasLocalOverride {
-                        Button("Clear Local Override") {
+                        Button(L10n.tr("Clear Local Override")) {
                             clearLocalOverride()
                         }
                     }
                 }
             }
 
-            WebDockCard(title: "Actions") {
+            WebDockCard(title: L10n.tr("Actions")) {
                 if externalEdit {
-                    Text("This shortcut changed while you were editing. Save uses your edits, or reload the saved values.")
+                    Text(L10n.tr("This shortcut changed while you were editing. Save uses your edits, or reload the saved values."))
                         .font(.caption).foregroundStyle(.secondary)
-                    Button("Reload Saved Values") { loadMetadata(currentShortcut); onDirtyChange(localOverrideChanged) }
+                    Button(L10n.tr("Reload Saved Values")) { loadMetadata(currentShortcut); onDirtyChange(localOverrideChanged) }
                 }
                 HStack {
-                    Button("Test Launch") { testLaunch() }
-                    Button("Duplicate") { duplicate() }
+                    Button(L10n.tr("Test Launch")) { testLaunch() }
+                    Button(L10n.tr("Duplicate")) { duplicate() }
                 }
                 HStack {
-                    Button("Save Changes") {
+                    Button(L10n.tr("Save Changes")) {
                         save()
                     }
                     .keyboardShortcut("s", modifiers: [.command])
 
                     if didSave {
-                        Label("Saved", systemImage: "checkmark.circle.fill")
+                        Label(L10n.tr("Saved"), systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.secondary)
                             .transition(.opacity)
                     }
 
                     Spacer()
 
-                    Button("Delete Shortcut", role: .destructive) {
+                    Button(L10n.tr("Delete Shortcut"), role: .destructive) {
                         showDeleteConfirmation = true
                     }
                 }
@@ -379,25 +382,25 @@ private struct ShortcutEditorView: View {
                 accountEmail = ""
             }
         }
-        .alert("New Group", isPresented: $showNewGroup) {
-            TextField("Group name", text: $newGroupName)
-            Button("Create") {
+        .alert(L10n.tr("New Group"), isPresented: $showNewGroup) {
+            TextField(L10n.tr("Group name"), text: $newGroupName)
+            Button(L10n.tr("Create")) {
                 do { groupID = try environment.shortcutStore.createGroup(name: newGroupName).id; newGroupName = "" }
-                catch { errorMessage = error.localizedDescription }
+                catch { errorMessage = L10n.errorDescription(error) }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.tr("Cancel"), role: .cancel) {}
         }
         .confirmationDialog(
-            "Delete “\(shortcut.displayName)”?",
+            L10n.tr("Delete “%@”?", shortcut.displayName),
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) {
+            Button(L10n.tr("Delete"), role: .destructive) {
                 deleteShortcut()
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.tr("Cancel"), role: .cancel) {}
         } message: {
-            Text("This shortcut will be removed from your library and synchronized devices.")
+            Text(L10n.tr("This shortcut will be removed from your library and synchronized devices."))
         }
         .alert(
             "WebDock",
@@ -406,9 +409,9 @@ private struct ShortcutEditorView: View {
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {}
+            Button(L10n.tr("OK"), role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "Unknown error")
+            Text(errorMessage ?? L10n.tr("Unknown error"))
         }
     }
 
@@ -447,12 +450,12 @@ private struct ShortcutEditorView: View {
             let current = environment.dataStore.shortcut(id: shortcut.id) ?? shortcut
             let resolved = try environment.deviceBindingResolver.refreshBinding(for: current)
             try environment.shortcutLauncher.launch(current, resolution: resolved, storageRoot: environment.runtimeStorage.rootURL)
-        } catch { errorMessage = error.localizedDescription }
+        } catch { errorMessage = L10n.errorDescription(error) }
     }
 
     private func duplicate() {
         do { _ = try environment.shortcutStore.duplicate(shortcut) }
-        catch { errorMessage = error.localizedDescription }
+        catch { errorMessage = L10n.errorDescription(error) }
     }
 
     private func save() {
@@ -474,7 +477,7 @@ private struct ShortcutEditorView: View {
                 didSave = false
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.errorDescription(error)
         }
     }
 
@@ -505,7 +508,7 @@ private struct ShortcutEditorView: View {
             resolutionRefresh = UUID()
             onDirtyChange(hasChanges)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.errorDescription(error)
         }
     }
 
@@ -517,7 +520,7 @@ private struct ShortcutEditorView: View {
             resolutionRefresh = UUID()
             onDirtyChange(hasChanges)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.errorDescription(error)
         }
     }
 
@@ -526,7 +529,7 @@ private struct ShortcutEditorView: View {
             try environment.shortcutStore.delete(shortcut)
             onDeleted()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.errorDescription(error)
         }
     }
 }

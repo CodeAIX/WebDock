@@ -1,7 +1,14 @@
 # WebDock UI v0.4 implementation handoff — 2026-10-30
 
 Baseline: main 4d4dd96aa6cbe371c91bf0a5d12f604190bd2922. Working checkout is source/ under
-/Users/x/Agent/WebDock. Target build is 0.4.0 (4), macOS 13.0, arm64 + x86_64.
+/Users/x/Agent/WebDock. Initial UI-5 build is 0.4.0 (4); the active XMAC feedback follow-up is 0.4.1 (5), macOS 13.0, arm64 + x86_64.
+
+## XMAC feedback follow-up — 2026-10-30
+
+The user reports XMAC validation is basically normal, with missing app branding, overlapping focus
+frames and a request for Chinese/English UI. Branch feat/v0.4.1-branding-localization addresses these
+in version 0.4.1 (5), stacked on UI-5. See V041_XMAC_FEEDBACK.md. The patch awaits user revalidation;
+no new Intel or two-device acceptance is implied by the XMAC report.
 
 ## Review order
 

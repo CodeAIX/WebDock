@@ -62,7 +62,7 @@ enum KeychainError: LocalizedError {
         switch self {
         case .status(let status):
             let message = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
-            return "Keychain error: \(message)"
+            return L10n.tr("Keychain error: %@", message)
         }
     }
 }

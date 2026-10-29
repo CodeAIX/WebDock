@@ -26,13 +26,15 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.codeaix.WebDock
         PRODUCT_NAME: WebDock
-        MARKETING_VERSION: 0.4.0
-        CURRENT_PROJECT_VERSION: 4
+        MARKETING_VERSION: 0.4.1
+        CURRENT_PROJECT_VERSION: 5
         INFOPLIST_FILE: Config/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         COMBINE_HIDPI_IMAGES: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        DEVELOPMENT_LANGUAGE: en
 
   WebDockTests:
     type: bundle.unit-test

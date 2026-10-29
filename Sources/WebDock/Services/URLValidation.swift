@@ -12,6 +12,6 @@ enum WebURLValidationError: LocalizedError {
     case invalidURL
 
     var errorDescription: String? {
-        "Only valid HTTP and HTTPS website URLs are supported."
+        L10n.tr("Only valid HTTP and HTTPS website URLs are supported.")
     }
 }

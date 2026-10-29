@@ -116,11 +116,11 @@ enum ShortcutLaunchError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "The shortcut does not contain a valid HTTP or HTTPS URL."
+            L10n.tr("The shortcut does not contain a valid HTTP or HTTPS URL.")
         case .profileShortcutCreationFailed:
-            "WebDock could not prepare the browser profile route."
+            L10n.tr("WebDock could not prepare the browser profile route.")
         case .openFailed:
-            "macOS could not open the shortcut."
+            L10n.tr("macOS could not open the shortcut.")
         }
     }
 }

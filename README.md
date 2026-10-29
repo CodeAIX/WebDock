@@ -34,6 +34,13 @@ Settings has six sidebar pages, theme, density, subtitle and badge preferences. 
 icons travel in backup/sync JSON; all devices editing icons should use v0.4 because v0.3 writers
 cannot retain unknown metadata. Real-device acceptance status is tracked in docs/UI_V04_STATUS.md.
 
+### Chinese and English
+
+Settings → General → Display Language offers Follow System (default), 简体中文 and English.
+App content changes immediately and draft edits are retained; restart WebDock to fully update
+macOS-owned menus and system dialogs. This preference belongs to each Mac and does not sync.
+Version 0.4.1 also includes the WebDock app icon and removes the overlapping Launcher focus frame.
+
 ## Browser account access
 
 On newer macOS versions, the OS may require explicit Files & Folders permission before WebDock can read another browser's profile metadata. WebDock provides first-run guidance, per-browser Authorize/Rescan controls, and a shortcut to Privacy & Security. The system remains the authority that grants or revokes access.

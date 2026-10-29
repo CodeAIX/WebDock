@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct NewShortcutSheet: View {
+    @ObservedObject private var language = AppLanguage.shared
     private static let defaultBrowserToken = "__WEBDOCK_DEFAULT_BROWSER__"
 
     let environment: AppEnvironment
@@ -28,18 +29,18 @@ struct NewShortcutSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("New Shortcut")
+            Text(L10n.tr("New Shortcut"))
                 .font(.title2.weight(.semibold))
 
             Form {
-                Section("Website") {
-                    TextField("Name (optional)", text: $name)
+                Section(L10n.tr("Website")) {
+                    TextField(L10n.tr("Name (optional)"), text: $name)
                     TextField("https://example.com", text: $urlString)
                 }
 
-                Section("Open With") {
-                    Picker("Browser", selection: $browserSelection) {
-                        Text("System Default Browser")
+                Section(L10n.tr("Open With")) {
+                    Picker(L10n.tr("Browser"), selection: $browserSelection) {
+                        Text(L10n.tr("System Default Browser"))
                             .tag(Self.defaultBrowserToken)
                         ForEach(BrowserFamily.allCases) { family in
                             Text(family.displayName)
@@ -60,10 +61,10 @@ struct NewShortcutSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel) {
+                Button(L10n.tr("Cancel"), role: .cancel) {
                     dismiss()
                 }
-                Button("Create") {
+                Button(L10n.tr("Create")) {
                     createShortcut()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -84,9 +85,9 @@ struct NewShortcutSheet: View {
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {}
+            Button(L10n.tr("OK"), role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "Unknown error")
+            Text(errorMessage ?? L10n.tr("Unknown error"))
         }
     }
 
@@ -102,7 +103,7 @@ struct NewShortcutSheet: View {
             onCreated?(shortcut)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.errorDescription(error)
         }
     }
 }

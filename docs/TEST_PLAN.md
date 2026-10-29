@@ -204,3 +204,22 @@ Ventura drag behavior and repeated restart acceptance remain in the device check
 Final combined XMAC checks also verified native Button tile arrow focus with live drag reorder,
 Compact density + hidden subtitle + hidden browser badge (then restored defaults), and Delete
 confirmation with Cancel. The diagnostic app was closed after validation.
+
+## 0.4.1 XMAC feedback regression
+
+- AppIcon: verify Dock, Finder and native About panel; packaged AppIcon.icns and Assets.car exist.
+  Source validator checks ten macOS PNG slots including 1024px and preserves alpha.
+- Mouse click launch → reopen Launcher: no retained selection frame. ⌘F → Return → arrows still
+  navigate, with a single native focus indicator. Recheck on Ventura.
+- Fresh language preference: Chinese macOS starts in Chinese; English starts in English; unsupported
+  language lists fall back to English. Chinese variants map to Simplified Chinese.
+- General → Display Language: switch English/简体中文/Follow System, checking Launcher, Library,
+  Settings, creation/account sheets, errors and tooltips. Existing draft text must survive switching.
+- Restart after a manual choice: native macOS menus/dialogs and content agree. Follow System removes
+  WebDock's per-app override and follows the global OS language; it does not change global settings.
+- Canonical data, URL/CrProfile protocol keys, Profile N directories, user names/URLs/emails, theme and
+  density raw values must not be translated or changed. Language preferences remain local-only.
+
+The isolated XMAC UI run covered language switching/restart, draft preservation, single focus and
+click-launch → keyboard-navigation recovery; patch acceptance on the user's normal installation
+and Intel macOS 13.6.9 remain pending.
