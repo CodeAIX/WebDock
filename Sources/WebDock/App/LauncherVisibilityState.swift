@@ -5,46 +5,40 @@ import Foundation
 struct LauncherVisibilityState {
     enum Action: Equatable {
         case none
-        case show
         case hide
     }
 
-    private(set) var showAfterActivation = false
+    private(set) var hasPendingShow = false
 
-    mutating func handleDockReopen(
-        isApplicationActive: Bool,
-        isLauncherVisible: Bool
-    ) -> Action {
+    /// Dock reopen should never synchronously show a hidden launcher. Instead,
+    /// queue a show request and let the app delegate service it on the next main
+    /// run-loop turn once the application is actually active.
+    mutating func handleDockReopen(isLauncherVisible: Bool) -> Action {
         if isLauncherVisible {
-            showAfterActivation = false
+            hasPendingShow = false
             return .hide
         }
 
-        if isApplicationActive {
-            showAfterActivation = false
-            return .show
-        }
-
-        // A Dock click can arrive while the app is still inactive. Do not show
-        // the panel yet: showing and activating in the same callback can race
-        // with the previous deactivation cycle. Wait for didBecomeActive.
-        showAfterActivation = true
+        hasPendingShow = true
         return .none
     }
 
-    mutating func handleDidBecomeActive() -> Action {
-        guard showAfterActivation else { return .none }
-        showAfterActivation = false
-        return .show
+    /// Losing activation always hides the panel, but deliberately preserves a
+    /// pending Dock-requested show. This absorbs late resign notifications from
+    /// the previous activation cycle without losing the user's click.
+    mutating func handleDidResignActive() -> Action {
+        .hide
     }
 
-    mutating func handleDidResignActive() -> Action {
-        // Preserve a pending Dock-requested show across any late resign event;
-        // the next didBecomeActive is the authoritative point to display.
-        return .hide
+    /// Called from a deferred main-run-loop task. A pending show is consumed
+    /// only if the application is truly active at that moment.
+    mutating func consumePendingShowIfActive(_ isApplicationActive: Bool) -> Bool {
+        guard hasPendingShow, isApplicationActive else { return false }
+        hasPendingShow = false
+        return true
     }
 
     mutating func cancelPendingShow() {
-        showAfterActivation = false
+        hasPendingShow = false
     }
 }
