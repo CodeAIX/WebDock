@@ -170,6 +170,7 @@ struct CanonicalSnapshot: Codable, Equatable {
     var shortcuts: [WebShortcut]
     var groups: [ShortcutGroup]
     var generatedAt: Date
+    var iconAssets: [String: Data]?
 
     static var empty: CanonicalSnapshot {
         CanonicalSnapshot(shortcuts: [], groups: [], generatedAt: Date(timeIntervalSince1970: 0))

@@ -212,7 +212,7 @@ struct SettingsView: View {
                 Text("WebDock automatically creates at most one local snapshot per day and keeps the newest 20 automatic snapshots. A pre-restore snapshot is created before every restore.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Portable .webdockbackup exports include URLs, browser families, account emails, groups, ordering, and tombstones, but never local Profile numbers or device-only overrides.")
+                Text("Portable .webdockbackup exports include URLs, browser families, account emails, groups, ordering, icons, and tombstones, but never local Profile numbers or device-only overrides.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

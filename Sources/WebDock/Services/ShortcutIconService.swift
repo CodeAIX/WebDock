@@ -62,10 +62,20 @@ final class IconAssetStore {
         return id
     }
 
+    func validate(_ data: Data, id: String) throws {
+        guard Self.validID(id), data.count <= Self.maximumAssetBytes,
+              Self.digest(data) == id,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let type = CGImageSourceGetType(source), type as String == UTType.png.identifier,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0, width <= 512, height <= 512 else { throw IconError.invalidAsset }
+    }
+
     /// Verify before installation; used by backup/sync too. Never re-encode a transported asset.
     func install(_ data: Data, id: String) throws {
-        guard Self.validID(id), data.count <= Self.maximumAssetBytes,
-              Self.digest(data) == id, NSImage(data: data) != nil else { throw IconError.invalidAsset }
+        try validate(data, id: id)
         try data.write(to: url(for: id), options: .atomic)
     }
 }
