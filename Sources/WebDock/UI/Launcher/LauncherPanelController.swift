@@ -9,6 +9,7 @@ final class LauncherPanel: NSPanel {
 @MainActor
 final class LauncherPanelController: NSWindowController {
     private let positionResolver = DockPositionResolver()
+    private var resignActiveObserver: NSObjectProtocol?
 
     init(environment: AppEnvironment, onOpenManager: @escaping () -> Void) {
         let size = NSSize(width: 600, height: 420)
@@ -22,7 +23,12 @@ final class LauncherPanelController: NSWindowController {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = true
+
+        // Keep visibility under WebDock's control. NSPanel.hidesOnDeactivate can
+        // race with Dock reopen handling: a panel shown by the Dock click can be
+        // immediately hidden by the previous deactivation cycle, producing the
+        // observed "flash then disappear" behavior.
+        panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .transient]
 
         let root = LauncherView(
@@ -33,10 +39,26 @@ final class LauncherPanelController: NSWindowController {
         panel.contentView = NSHostingView(rootView: root)
 
         super.init(window: panel)
+
+        resignActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.hide()
+            }
+        }
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        if let resignActiveObserver {
+            NotificationCenter.default.removeObserver(resignActiveObserver)
+        }
     }
 
     func showNearDock() {
