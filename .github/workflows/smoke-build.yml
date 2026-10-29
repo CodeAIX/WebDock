@@ -30,13 +30,17 @@ jobs:
       - name: Validate source contract
         run: |
           plutil -lint Config/Info.plist
-          plutil -lint Config/WebDock.entitlements
           python3 scripts/validate_document_types.py Config/Info.plist
+          grep -q 'macOS: "13.0"' project.yml
+          if grep -R -n -E 'CloudKit|com\.apple\.developer\.icloud|import SwiftData' Config project.yml Sources/WebDock; then
+            echo "CloudKit/iCloud entitlement or SwiftData dependency must not return."
+            exit 1
+          fi
 
       - name: Generate project
         run: xcodegen generate
 
-      - name: Build Release app
+      - name: Build universal Release app for macOS 13+
         env:
           DERIVED_DATA: ${{ runner.temp }}/WebDockDerivedData
         run: |
@@ -45,8 +49,11 @@ jobs:
             -project WebDock.xcodeproj \
             -scheme WebDock \
             -configuration Release \
-            -destination 'platform=macOS' \
+            -destination 'generic/platform=macOS' \
             -derivedDataPath "$DERIVED_DATA" \
+            MACOSX_DEPLOYMENT_TARGET=13.0 \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             clean build
@@ -55,33 +62,28 @@ jobs:
           test -d "$APP"
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
-      - name: Verify built LaunchServices contract
+      - name: Verify built app contract
         run: |
           set -euo pipefail
           plutil -lint "$APP_PATH/Contents/Info.plist"
           python3 scripts/validate_document_types.py "$APP_PATH/Contents/Info.plist"
+          test "$(plutil -extract LSMinimumSystemVersion raw "$APP_PATH/Contents/Info.plist")" = "13.0"
+          ARCHS_OUTPUT="$(lipo -archs "$APP_PATH/Contents/MacOS/WebDock")"
+          echo "Architectures: $ARCHS_OUTPUT"
+          echo "$ARCHS_OUTPUT" | grep -q arm64
+          echo "$ARCHS_OUTPUT" | grep -q x86_64
 
-      - name: Ad-hoc sign smoke bundle without restricted entitlements
+      - name: Ad-hoc sign smoke bundle
         run: |
           set -euo pipefail
-          # iCloud/CloudKit is a restricted entitlement on macOS and must be
-          # authorized by a provisioning profile. An ad-hoc signature cannot
-          # safely claim it, so smoke builds intentionally omit all restricted
-          # entitlements and exercise local functionality only.
           codesign \
             --force \
             --deep \
             --sign - \
             --timestamp=none \
             "$APP_PATH"
-
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           codesign -dv --verbose=2 "$APP_PATH" 2>&1
-
-          if codesign -d --entitlements :- "$APP_PATH" 2>&1 | grep -q 'com.apple.developer.icloud'; then
-            echo "Smoke app unexpectedly contains restricted iCloud entitlements."
-            exit 1
-          fi
 
       - name: Package app
         env:
