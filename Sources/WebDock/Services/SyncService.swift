@@ -185,7 +185,7 @@ final class SyncStatusCenter: ObservableObject {
 @MainActor
 final class SyncCoordinator {
     private let modelContainer: ModelContainer
-    private let cloudKitProvider: CloudKitSyncProvider
+    private var cloudKitProvider: CloudKitSyncProvider?
     private var observers: [NSObjectProtocol] = []
     private var scheduledTask: Task<Void, Never>?
     private var isSyncing = false
@@ -195,7 +195,7 @@ final class SyncCoordinator {
         cloudKitProvider: CloudKitSyncProvider? = nil
     ) {
         self.modelContainer = modelContainer
-        self.cloudKitProvider = cloudKitProvider ?? CloudKitSyncProvider()
+        self.cloudKitProvider = cloudKitProvider
 
         observers.append(
             NotificationCenter.default.addObserver(
@@ -282,13 +282,21 @@ final class SyncCoordinator {
         }
     }
 
+    private func iCloudProvider() -> CloudKitSyncProvider {
+        if let cloudKitProvider { return cloudKitProvider }
+        let provider = CloudKitSyncProvider()
+        cloudKitProvider = provider
+        return provider
+    }
+
     private func synchronizeWithCloudKit() async throws {
+        let provider = iCloudProvider()
         let local = try localSnapshot()
-        let remote = try await cloudKitProvider.load() ?? .empty
+        let remote = try await provider.load() ?? .empty
         let merged = SyncMergeEngine.merge(local: local, remote: remote)
         try apply(merged)
         let refreshed = try localSnapshot()
-        try await cloudKitProvider.save(refreshed)
+        try await provider.save(refreshed)
     }
 
     private func localSnapshot() throws -> SyncSnapshot {

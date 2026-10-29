@@ -1,29 +1,46 @@
 # WebDock
 
-WebDock is a native macOS website-shortcut launcher and manager designed to live as one icon in the Dock.
+WebDock is a native macOS website launcher that lives as one icon in the Dock.
 
-Instead of installing many browser web apps, WebDock stores/organizes shortcuts and launches them back into the appropriate normal browser context. Chrome `.crwebloc` shortcuts are preserved so Chrome can honor their `CrProfile` field.
+Its core object is a **portable website launch rule** rather than a browser-exported shortcut file:
 
-## Status
+`URL + preferred browser family + optional account email + name/group/order`
 
-This repository handoff contains an implementation-ready specification and starter source skeleton. The first development target is WebDock v0.1 for macOS 14+.
+On each Mac, WebDock resolves that portable intent to the browser and local profile available on that device. Chromium `Profile N` directory names are local implementation details and are never used as cross-device identity.
 
-## Start here
+## Current product direction
 
-1. Read `AGENTS.md`.
-2. Read `docs/SPEC.md`.
-3. Follow `docs/IMPLEMENTATION_PLAN.md`.
-4. Use `docs/TEST_PLAN.md` as the release gate.
+- Manual creation/editing is the primary workflow (`+` in Launcher and Manager).
+- `.crwebloc`, `.webloc`, and `.url` import is intentionally not supported.
+- Chrome/Chromium-family accounts are matched between Macs by signed-in account email.
+- If a preferred account is missing, WebDock opens the preferred browser with its default profile and shows a warning.
+- If a preferred browser is missing, WebDock opens the system default browser and shows a warning.
+- Device-only browser/profile overrides never change the synced rule.
+- iCloud/CloudKit is the first sync provider; WebDAV is planned against the same provider-independent snapshot schema.
 
-## Product constraints
+## Privacy boundary
 
-- Native Swift / SwiftUI / AppKit.
-- No Electron.
-- No embedded browser.
-- No private Dock APIs.
-- Transactional shortcut import.
-- Preserve Chrome `.crwebloc` files.
+WebDock may read browser profile metadata required to map an account email to a local profile directory. It does not need cookies, passwords, history, or page content.
 
-## Repository
+## Technology
 
-`CodeAIX/WebDock`
+- macOS 14+
+- Swift + SwiftUI + AppKit
+- SwiftData for local canonical data and device bindings
+- CloudKit private database for portable sync snapshots
+- `NSWorkspace` for external browser launches
+- no Electron/Tauri
+- no embedded browser/WebView
+- no private Dock APIs or Accessibility hacks
+
+## Architecture docs
+
+Start with:
+
+1. `AGENTS.md`
+2. `docs/SYNC_AND_DEVICE_RESOLUTION.md`
+3. `docs/SPEC.md`
+4. `docs/TEST_PLAN.md`
+5. `docs/DECISIONS.md`
+
+Repository: `CodeAIX/WebDock`
