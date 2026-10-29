@@ -1,377 +1,208 @@
-# WebDock Manual-First Sync & Device Resolution
+# WebDock Sync, Backup & Device Resolution
 
-Status: proposed architecture for M9 / Issue #20
+Status: authoritative architecture for WebDock 0.3+
 
 ## 1. Product definition
 
-WebDock is a local-first, cross-device website launch-rule manager for macOS.
+WebDock is a local-first, cross-device website launch-rule manager for macOS 13+.
 
-The primary workflow is manual creation and editing. Browser-exported shortcut files (`.crwebloc`, `.webloc`, `.url`) are no longer a product input surface.
+The primary workflow is manual creation/editing. Browser-exported shortcut files (`.crwebloc`, `.webloc`, `.url`) are not product inputs.
 
-Primary creation surfaces:
-
-- Launcher `+`
-- Manager `+`
-- `File > New Shortcut` / `⌘N`
-- optional future URL paste, browser-address drag, Share Extension, or browser extension
-
-The canonical product object is a portable launch intent, not a local browser profile path.
-
-## 2. Two-layer model
-
-### 2.1 Synced shortcut intent
-
-This data may sync between Macs:
+The canonical object is portable launch intent:
 
 ```text
-SyncedShortcut
+WebShortcut
   id: UUID
-  name: String
-  url: HTTP(S) URL
-  preferredBrowserFamily: BrowserFamily?
-  preferredAccountEmail: String?
-  groupID: UUID?
-  orderKey: String/Double
-  customIconReference/payload: optional
-  createdAt
-  modifiedAt
-  deletion/tombstone metadata
+  name
+  HTTP(S) URL
+  preferredBrowserFamily?
+  targetAccountEmail?
+  groupID?
+  sortIndex
+  createdAt / updatedAt / deletedAt
 ```
 
-The synced layer describes **what the user wants**.
+## 2. Portable vs device-local data
 
-### 2.2 Device-local binding
+Portable data describes **what the user wants** and may be exported/synchronized.
 
-This data never becomes canonical cross-device state:
+Device-local data describes **how this Mac satisfies the rule**:
 
 ```text
 DeviceShortcutBinding
-  shortcutID: UUID
-  resolvedBrowserBundleIdentifier: String?
-  resolvedBrowserApplicationURL: URL?
-  resolvedProfileDirectory: String?    // Default / Profile N
-  resolvedAccountEmail: String?
-  resolvedAccountDisplayName: String?
-  resolutionStatus: ResolutionStatus
-  localOverrideProfileDirectory: String?
-  lastResolvedAt: Date
+  shortcutID
+  resolvedBrowserBundleIdentifier
+  resolvedProfileDirectory        // Default / Profile N
+  resolvedAccountEmail
+  resolutionStatus / warning
+  local browser/profile overrides
+  updatedAt
 ```
 
-The device layer describes **how this Mac can satisfy the intent**.
+`DeviceShortcutBinding` never appears in portable backups, Synced Folder data, or WebDAV data.
 
-## 3. Browser identity
+## 3. Account identity across Macs
 
-Do not use local application paths as synchronized identity.
+Never synchronize Chromium profile directories such as `Default`, `Profile 3`, or `Profile 12`.
 
-Use a stable browser family enum, for example:
+Portable Chromium account identity is the locally reported primary signed-in account email.
 
-```text
-systemDefault
-safari
-chrome
-chromeBeta
-chromeDev
-chromeCanary
-chromium
-edge
-brave
-vivaldi
-firefox
-arc
-```
-
-Each Mac maps that family to an installed application/bundle identifier.
-
-If the preferred browser is unavailable, WebDock opens the URL with the system default browser and records `missingBrowser` locally.
-
-## 4. Account identity across devices
-
-A Chromium profile directory such as `Default`, `Profile 3`, or `Profile 12` is local installation state and must never be synchronized as the canonical account identity.
-
-For Chromium-family browsers, the portable account identity is the primary signed-in account email.
-
-Email comparison rules:
-
-1. trim surrounding whitespace;
-2. normalize case for comparison;
-3. compare exact email identity after normalization;
-4. do not apply provider-specific transformations such as Gmail dot removal or `+tag` removal.
-
-The local profile directory remains only a cache/output of resolution.
+Matching rules:
+1. trim whitespace;
+2. lowercase for comparison;
+3. exact email identity after normalization;
+4. no Gmail dot removal or `+tag` rewriting.
 
 Example:
 
 ```text
-Mac A
-  foo@example.com -> Profile 12
-
-Synced intent
-  preferredAccountEmail = foo@example.com
-
-Mac B
-  foo@example.com -> Profile 3
-
-Result
-  WebDock on Mac B launches Profile 3.
+Mac A: foo@example.com -> Profile 12
+portable rule: foo@example.com
+Mac B: foo@example.com -> Profile 3
+result on Mac B: launch Profile 3
 ```
 
-## 5. Device resolution algorithm
+## 4. Device resolution
 
-For each shortcut:
+1. Resolve BrowserFamily to an installed browser.
+2. Missing browser -> system default browser + local warning.
+3. No target email -> selected browser's normal default/last-used profile.
+4. One matching email -> that local profile.
+5. Zero matches -> browser default + `missingAccount` warning.
+6. Multiple matches -> browser default + `ambiguousAccount` warning until a local override is selected.
+7. Per-Mac overrides are stored only in DeviceBindings.
 
-### Browser resolution
+## 5. Browser account access
 
-1. Resolve the preferred browser family to an installed browser.
-2. If not installed, set `missingBrowser` and use the macOS default browser.
+On macOS versions that protect other applications' data, reading Chromium profile metadata may require user approval in Privacy & Security > Files & Folders.
 
-### Account resolution
+WebDock:
+- explains why profile metadata is needed;
+- can initiate a profile read so macOS can present its permission flow;
+- shows per-browser access/rescan status;
+- provides a best-effort shortcut to Privacy & Security;
+- cannot grant or toggle the OS permission itself.
 
-If no account is requested, use the selected browser's normal default/last-used behavior.
+WebDock reads profile metadata only. It does not read cookies, browsing history, saved passwords, tokens, or page content.
 
-If an account email is requested:
+## 6. Local storage
 
-1. enumerate supported local browser profiles;
-2. find profiles whose primary signed-in email matches the requested email;
-3. exactly one match -> bind to that profile directory (`resolved`);
-4. zero matches -> use browser default/last-used behavior (`missingAccount`);
-5. multiple matches -> use browser default/last-used behavior (`ambiguousAccount`) until a local override is selected.
+WebDock uses Codable JSON instead of SwiftData:
 
-Never silently choose one of multiple matches based only on profile number or local name.
+```text
+Application Support/WebDock/
+  Canonical.json
+  DeviceBindings.json
+  Backups/
+  Cache/
+```
 
-## 6. Device-only overrides
+Writes use atomic replacement. This avoids a macOS 14-only persistence dependency and keeps the portable model directly inspectable.
 
-A shortcut may need a different local binding without changing its cross-device meaning.
+## 7. Backup model
 
-Examples:
+### Automatic/local snapshots
 
-- corporate account is named differently on one managed Mac;
-- the same email exists in two local Chrome profiles;
-- one Mac should intentionally use a different local profile.
+Full local snapshots may contain canonical data plus DeviceBindings. WebDock creates at most one automatic snapshot per day and keeps the newest 20 automatic snapshots.
 
-Provide an action:
+Additional safety snapshots are created before restore and before a sync merge changes local canonical data.
 
-> Use a different account/profile on this Mac
+### Portable export
 
-The resulting mapping is stored only in `DeviceShortcutBinding`.
+`.webdockbackup` contains:
+- format/schema metadata;
+- canonical shortcuts/groups/tombstones;
+- browser family and account email;
+- ordering.
 
-Editing the synchronized target account should be a separate explicit action:
+It excludes DeviceBindings and all local `Profile N` values.
 
-> Change account on all synced devices
-
-This prevents accidental global changes caused by one device's local configuration.
-
-## 7. Warning and fallback UX
-
-Resolution failure does not make a shortcut unusable.
-
-### `missingAccount`
-
-Launch behavior:
-
-- open the preferred browser using its default/last-used profile.
-
-UI:
-
-- yellow warning icon next to Account;
-- message: `Account foo@example.com is not available on this Mac. WebDock is using the browser default.`
-- actions: `Choose for This Mac…` and `Change Synced Account…`.
-
-### `ambiguousAccount`
-
-Launch behavior:
-
-- use browser default/last-used profile until the user chooses a local binding.
-
-UI:
-
-- warning explaining multiple profiles match;
-- action: `Choose Profile for This Mac…`.
-
-### `missingBrowser`
-
-Launch behavior:
-
-- system default browser.
-
-UI:
-
-- warning: `Preferred browser is not installed on this Mac. Using system default.`
-
-### Surfaces
-
-- shortcut editor: full warning text;
-- Launcher: optional subtle warning badge;
-- Settings > Sync & Device Resolution: aggregate unresolved items for the current Mac.
+Restore modes:
+- **Replace Current Library** — replace canonical data; portable backups intentionally reset device bindings so the destination Mac resolves accounts afresh.
+- **Merge with Current Library** — stable UUID merge using newest-record-wins semantics, including tombstones.
 
 ## 8. Sync provider policy
 
-Support exactly one active provider at a time:
+Exactly one provider may be active:
 
 ```text
 Off
-iCloud
+Synced Folder
 WebDAV
 ```
 
-The domain model must remain provider-independent.
+There is no Apple cloud entitlement/provider in WebDock.
 
-### 8.1 iCloud
+### Synced Folder
 
-Recommended first implementation.
+The user selects an ordinary directory. WebDock reads/writes:
 
-Reasons:
+```text
+WebDockSync.json
+```
 
-- no server URL/account setup inside WebDock;
-- natural fit for a macOS-only personal utility;
-- Apple's CloudKit stack provides private per-user cloud storage and change synchronization.
+The directory may itself be transported by iCloud Drive, Dropbox, OneDrive, Syncthing, NAS tools, or another filesystem synchronization product. This is ordinary file synchronization; WebDock does not integrate with the cloud provider API.
 
-Only `SyncedShortcut`, groups, ordering, tombstones, and explicitly synchronized custom assets belong in cloud state.
+### WebDAV
 
-`DeviceShortcutBinding` stays in a separate local-only store.
+- user supplies an existing WebDAV folder URL;
+- username stored in preferences;
+- password/app-password stored in macOS Keychain;
+- `GET WebDockSync.json` reads remote canonical state;
+- `PUT WebDockSync.json` uses `ETag` plus `If-Match`, or `If-None-Match: *` for first creation;
+- HTTP 412 is treated as a conflict and triggers a fresh merge attempt;
+- DeviceBindings are never uploaded.
 
-Implementation should prefer an explicit sync boundary rather than allowing machine-local fields to leak into a CloudKit-backed model.
+HTTPS is recommended for remote WebDAV servers.
 
-### 8.2 WebDAV
+## 9. Conflict and deletion model
 
-Advanced/self-hosted provider added after iCloud is stable.
+Every canonical object has a stable UUID and `updatedAt`.
 
-Requirements:
+Initial merge policy:
+- different UUIDs merge;
+- same UUID -> newer `updatedAt` wins;
+- deletion is represented by a `deletedAt` tombstone and participates in the same rule.
 
-- URL + username/app-password configuration;
-- credentials stored in Keychain only;
-- same portable record schema as iCloud;
-- conditional writes with ETag / `If-Match` to avoid blind overwrite;
-- optional client-side encryption for the synchronized payload;
-- no browser cookies/passwords/profile files are uploaded.
+This prevents stale replicas from resurrecting deleted shortcuts.
 
-Switching sync providers must never change shortcut semantics.
+## 10. Privacy boundary
 
-## 9. Privacy model
+Portable data may contain target account email because deterministic account resolution requires it.
 
-The minimum synchronized personal account identifier is the target account email because cross-device account matching depends on it.
-
-Do not synchronize:
-
+Never export/synchronize:
 - cookies;
 - browser history;
-- passwords;
-- tokens;
-- Chrome profile folders;
-- local browser config files;
-- local `Profile N` directory names;
-- favicon cache;
-- local resolution warnings/overrides.
+- passwords or tokens;
+- browser profile folders/config files;
+- `Default` / `Profile N` directories;
+- local warnings/overrides;
+- runtime cache.
 
-A future privacy mode may store a derived account match key rather than plaintext email, but the first implementation should prioritize deterministic matching, clear UX, and transport security.
+WebDAV password is stored in Keychain and never written to canonical JSON or backup files.
 
-## 10. Conflict model
-
-Every synchronized object has a stable UUID.
-
-Deletion uses tombstones so offline Macs do not resurrect removed shortcuts.
-
-Initial conflict policy:
-
-- changes to different records merge automatically;
-- ordering uses stable order keys rather than device-local array offsets;
-- simultaneous edits to the same shortcut must not silently discard user data;
-- keep a recoverable conflict copy or surface an explicit conflict notice if both versions changed from the same base.
-
-For WebDAV, ETag-based conditional writes are required to detect remote modification rather than using modification time alone.
-
-## 11. Legacy migration and removal of import support
-
-The final manual-first release removes:
-
-- `.crwebloc` document registration;
-- `.webloc` document registration;
-- `.url` document registration;
-- Finder -> Dock shortcut-file import;
-- ImportCoordinator/importer UI flows;
-- managed shortcut source files as runtime assets.
-
-Existing user data must be migrated before those compatibility paths are removed.
-
-### Existing normalized shortcuts
-
-Keep URL/name/browser information. Convert the current selected profile directory into an account email using local browser metadata when possible.
-
-### Existing legacy `originalShortcutFile`
-
-1. parse the managed original once during migration;
-2. extract URL + local browser/profile information;
-3. resolve profile directory to account email when possible;
-4. save the new canonical portable rule;
-5. preserve a reversible legacy backup for one release;
-6. stop using the original file for launch.
-
-If the old profile cannot be mapped to an email, migrate the URL/browser and leave account unset; show a one-time account-selection warning instead of blocking launch.
-
-## 12. Settings information architecture
-
-### General
-
-- Launcher behavior
-- default browser for new shortcuts
-- default account for new shortcuts (optional)
-
-### Sync
-
-- provider: Off / iCloud / WebDAV
-- sync status
-- last successful sync
-- provider-specific configuration
-- `Sync Now`
-
-### Device Resolution
-
-- installed/detected browsers
-- detected accounts
-- unresolved shortcut count
-- list of `missingBrowser`, `missingAccount`, and `ambiguousAccount` shortcuts
-- local bindings/overrides
-
-### Privacy
-
-- whether account emails are shown in UI
-- WebDAV encryption settings when implemented
-- clear local favicon/cache data
-
-## 13. Recommended implementation sequence
-
-1. Remove shortcut-file import UI and LaunchServices document declarations.
-2. Migrate old records to manual-first canonical shortcuts.
-3. Introduce `BrowserFamily` and remove profile directory from portable identity.
-4. Add local `DeviceShortcutBinding` and account-email resolver.
-5. Add missing/ambiguous account and missing-browser fallback UX.
-6. Add device-only overrides.
-7. Add iCloud sync.
-8. Test two-Mac scenario with intentionally different Chrome profile numbers.
-9. Add WebDAV provider after iCloud behavior is stable.
-10. Add optional encrypted WebDAV payload support.
-
-## 14. Critical acceptance scenario
+## 11. Critical acceptance scenario
 
 Mac A:
 
 ```text
-Shortcut: ChatGPT
-URL: https://chatgpt.com/
+ChatGPT
+https://chatgpt.com/
 Browser: Chrome
 Account: foo@example.com
-Local Chrome directory: Profile 12
+local directory: Profile 12
 ```
 
-After sync to Mac B:
+After Synced Folder or WebDAV sync to Mac B:
 
 ```text
-foo@example.com exists as Profile 3
+foo@example.com exists locally as Profile 3
 ```
 
 Expected:
 
 ```text
-WebDock -> Chrome -> local Profile 3 -> normal ChatGPT browser tab
+WebDock -> Chrome -> Profile 3 -> normal ChatGPT tab
 ```
 
 If Mac C has Chrome but no `foo@example.com` profile:
@@ -380,4 +211,12 @@ If Mac C has Chrome but no `foo@example.com` profile:
 WebDock -> Chrome default profile -> ChatGPT
 ```
 
-and the shortcut editor must display a visible warning that `foo@example.com` is unavailable on this Mac.
+and the shortcut shows a visible missing-account warning.
+
+## 12. Platform acceptance
+
+- deployment target macOS 13.0+
+- universal `arm64 + x86_64` release artifact
+- real acceptance target includes Intel macOS 13.6.9 and a current Apple Silicon Mac
+- no SwiftData dependency
+- no macOS 14-only UI without fallback
