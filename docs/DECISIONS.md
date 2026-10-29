@@ -13,22 +13,22 @@ There is no supported API to anchor an NSPopover precisely to a Dock tile. WebDo
 ## ADR-003 — Preserve Chrome `.crwebloc`
 Status: Superseded.
 
-Historical only. The product no longer imports browser shortcut files. Transient `.crwebloc` may still be generated internally at launch time to route a URL to a resolved Chromium profile.
+Historical only. The product does not import browser shortcut files. A transient `.crwebloc` may still be generated internally to route a URL to a resolved Chromium profile.
 
-## ADR-004 — No App Sandbox for direct/private distribution
-Status: Accepted for current distribution.
+## ADR-004 — No App Sandbox for current direct distribution
+Status: Accepted.
 
-Browser profile discovery and direct distribution are simpler without App Sandbox. Revisit if Mac App Store distribution becomes a goal.
+Browser profile discovery, arbitrary Synced Folder selection, and direct distribution are simpler without App Sandbox. Revisit only if Mac App Store distribution becomes a goal.
 
 ## ADR-005 — External browser Web Apps
 Status: Deferred.
 
-WebDock launches normal browser tabs/windows. Browser-managed standalone web apps are outside the current core model.
+WebDock launches normal browser tabs/windows. Browser-managed standalone web apps are outside the core model.
 
 ## ADR-006 — SwiftData local persistence
-Status: Accepted.
+Status: Superseded by ADR-016.
 
-SwiftData stores canonical shortcuts/groups plus device-local bindings. M9 deliberately starts a fresh named store because all pre-M9 user data is test-only and no migration is required.
+SwiftData required macOS 14 and no longer fits the macOS 13 support target.
 
 ## ADR-007 — Imported files as canonical inputs
 Status: Superseded by ADR-010.
@@ -38,7 +38,7 @@ Import-era behavior is removed from the product and source tree.
 ## ADR-008 — Imported source cleanup
 Status: Superseded by ADR-010.
 
-There are no browser shortcut-file imports, managed source files, staging transactions, or source cleanup flows in M9.
+There are no browser shortcut-file imports, managed source files, staging transactions, or source cleanup flows.
 
 ## ADR-009 — Shortcut creation belongs to Launcher/Manager
 Status: Accepted.
@@ -48,7 +48,7 @@ Primary creation surfaces are Launcher `+` and Manager `+`; future `File > New S
 ## ADR-010 — Manual-first portable launch rules
 Status: Accepted.
 
-The canonical WebShortcut is portable user intent:
+Canonical WebShortcut is portable user intent:
 
 `URL + BrowserFamily + optional Account Email + name/group/order`
 
@@ -57,37 +57,69 @@ WebDock does not register/import `.crwebloc`, `.webloc`, or `.url` files.
 ## ADR-011 — Account email is cross-device identity
 Status: Accepted.
 
-Chromium profile directories such as `Default`, `Profile 3`, or `Profile 12` are machine-local implementation details and must never be synced as account identity.
-
-The portable account key is the browser's locally reported primary signed-in account email. Matching trims whitespace and compares normalized lowercase strings; Gmail-specific dot/plus rewriting is intentionally not performed.
+`Default`, `Profile 3`, and `Profile 12` are machine-local implementation details. The portable account key is the browser's locally reported signed-in account email. Matching trims whitespace and compares normalized lowercase strings; Gmail-specific dot/plus rewriting is intentionally not performed.
 
 ## ADR-012 — Separate canonical intent from DeviceShortcutBinding
 Status: Accepted.
 
-Each Mac resolves a canonical shortcut against its own installed browsers/profile metadata. The resulting bundle identifier, local Profile directory, warning state, and device-only override live in `DeviceShortcutBinding` and never enter a sync payload.
+Each Mac resolves canonical intent against its own installed browsers/profile metadata. Local bundle identifier, Profile directory, warning state, and device-only override live in DeviceShortcutBinding and never enter portable backup/sync data.
 
 Resolution degrades gracefully:
 - missing account -> preferred browser default profile + warning;
-- ambiguous account -> preferred browser default + warning until local override;
+- ambiguous account -> preferred browser default + warning;
 - missing browser -> system default browser + warning.
-
-Warnings do not block launch.
 
 ## ADR-013 — Transient Chromium profile routing remains internal
 Status: Accepted.
 
-When a local Chromium profile has been resolved, WebDock creates a transient runtime `.crwebloc` containing the current URL and `CrProfile`, then explicitly opens it with the resolved browser. This file is cache/runtime state only and is neither imported nor synced.
+When a local Chromium profile is resolved, WebDock creates a transient runtime `.crwebloc` containing URL + `CrProfile`, then explicitly opens it with the resolved browser. This is runtime cache only.
 
-## ADR-014 — Provider-independent sync snapshots
+## ADR-014 — Provider-independent canonical snapshots
 Status: Accepted.
 
-Sync payloads contain only canonical shortcut/group records. Stable UUIDs identify records; `updatedAt` participates in conflict merge and `deletedAt` tombstones prevent offline resurrection.
+Portable backup and synchronization use the same canonical model. Stable UUIDs identify records; `updatedAt` drives initial conflict merge and `deletedAt` tombstones prevent stale resurrection. DeviceShortcutBinding is excluded.
 
-`DeviceShortcutBinding` is explicitly excluded.
+## ADR-015 — Apple cloud provider
+Status: Superseded by ADR-018.
 
-## ADR-015 — iCloud first, WebDAV second
+The earlier Apple cloud provider design was abandoned. WebDock does not carry Apple cloud entitlements and does not depend on paid Apple developer capabilities for synchronization.
+
+## ADR-016 — Codable JSON persistence for macOS 13+
 Status: Accepted.
 
-iCloud/CloudKit private database is the first sync provider and uses container `iCloud.io.github.codeaix.WebDock`.
+Local persistence is split into:
 
-WebDAV is planned against the same serialized snapshot model. Credentials must live in Keychain and conditional ETag/If-Match writes must be used before WebDAV is enabled.
+- `Canonical.json` — portable shortcuts/groups/tombstones;
+- `DeviceBindings.json` — local browser/Profile resolution and overrides.
+
+Atomic JSON writes replace SwiftData. This supports macOS 13 and makes the portable schema directly reusable by backup and sync providers.
+
+## ADR-017 — Built-in backup and recovery
+Status: Accepted.
+
+WebDock provides:
+- at most one automatic full local snapshot per day;
+- retention of newest 20 automatic snapshots;
+- manual full local snapshot;
+- portable `.webdockbackup` export without DeviceBindings/Profile N;
+- Replace and Merge restore;
+- Pre-Restore and Pre-Sync safety snapshots.
+
+## ADR-018 — Synced Folder and WebDAV are the sync providers
+Status: Accepted.
+
+Exactly one provider may be active: Off, Synced Folder, or WebDAV.
+
+Synced Folder writes `WebDockSync.json` to an ordinary user-selected directory. The directory may independently be synchronized by iCloud Drive, Dropbox, OneDrive, Syncthing, NAS software, etc.; WebDock itself integrates with none of those provider APIs.
+
+WebDAV uses the same canonical JSON schema. Passwords live in macOS Keychain and writes use ETag/`If-Match` conflict protection.
+
+## ADR-019 — macOS owns browser-data permission
+Status: Accepted.
+
+WebDock may trigger profile metadata reads and provide permission guidance, but it cannot grant or toggle Files & Folders authorization. First-run onboarding and Settings must make this boundary explicit and provide Authorize/Rescan plus a Privacy & Security shortcut.
+
+## ADR-020 — macOS 13+ Universal support
+Status: Accepted.
+
+Deployment target is macOS 13.0. Release smoke artifacts must contain arm64 and x86_64 slices. macOS 14-only framework/UI dependencies require removal or explicit compatibility fallback.
