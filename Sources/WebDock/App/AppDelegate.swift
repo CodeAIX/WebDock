@@ -4,12 +4,23 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var environment: AppEnvironment?
     private var launcherPanelController: LauncherPanelController?
+    private var managerWindowController: ManagerWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             let environment = try AppEnvironment()
             self.environment = environment
-            launcherPanelController = LauncherPanelController(environment: environment)
+
+            let manager = ManagerWindowController(environment: environment)
+            managerWindowController = manager
+
+            launcherPanelController = LauncherPanelController(
+                environment: environment,
+                onOpenManager: { [weak self] in
+                    self?.launcherPanelController?.hide()
+                    self?.managerWindowController?.showManager()
+                }
+            )
             launcherPanelController?.showNearDock()
         } catch {
             NSAlert(error: error).runModal()
