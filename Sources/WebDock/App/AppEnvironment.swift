@@ -8,6 +8,7 @@ final class AppEnvironment {
     let importCoordinator: ImportCoordinator
     let shortcutLauncher: ShortcutLauncher
     let shortcutStore: ShortcutStore
+    let shortcutCreationService: ShortcutCreationService
     let browserCatalog: BrowserCatalog
 
     init() throws {
@@ -18,6 +19,7 @@ final class AppEnvironment {
             modelContainer: modelContainer,
             managedStorage: managedStorage
         )
+        shortcutCreationService = ShortcutCreationService(modelContainer: modelContainer)
         browserCatalog = BrowserCatalog()
         importCoordinator = ImportCoordinator(
             modelContainer: modelContainer,
