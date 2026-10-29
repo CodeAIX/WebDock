@@ -97,6 +97,76 @@ final class ShortcutLauncherTests: XCTestCase {
     }
 
     @MainActor
+    func testSpecifiedChromeProfileGeneratesCrWeblocAndOpensItWithChrome() throws {
+        let workspace = WorkspaceSpy()
+        let chromeURL = URL(fileURLWithPath: "/Applications/Google Chrome.app")
+        workspace.applicationURLs["com.google.Chrome"] = chromeURL
+        let launcher = ShortcutLauncher(workspace: workspace)
+
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("WebDockProfileLaunch-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: root) }
+
+        let shortcut = WebShortcut(
+            displayName: "ChatGPT Research",
+            normalizedURLString: "https://chatgpt.com/",
+            sourceType: .directURL,
+            launchMode: .specifiedBrowser
+        )
+        shortcut.browserBundleIdentifier = "com.google.Chrome"
+        shortcut.browserProfileDirectory = "Profile 12"
+        shortcut.browserProfileDisplayName = "Research"
+        shortcut.browserProfileAccountEmail = "research@example.com"
+
+        try launcher.launch(shortcut, storageRoot: root)
+
+        XCTAssertTrue(workspace.openedURLs.isEmpty)
+        XCTAssertEqual(workspace.specifiedOpenCalls.count, 1)
+        XCTAssertEqual(workspace.specifiedOpenCalls[0].applicationURL, chromeURL)
+
+        let generatedURL = workspace.specifiedOpenCalls[0].url
+        XCTAssertEqual(generatedURL.pathExtension, "crwebloc")
+        XCTAssertTrue(generatedURL.path.contains("Cache/ProfileLaunch"))
+
+        let data = try Data(contentsOf: generatedURL)
+        let plist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+                as? [String: String]
+        )
+        XCTAssertEqual(plist["URL"], "https://chatgpt.com/")
+        XCTAssertEqual(plist["CrProfile"], "Profile 12")
+    }
+
+    @MainActor
+    func testProfileRoutingRejectsUnsupportedBrowser() throws {
+        let workspace = WorkspaceSpy()
+        workspace.applicationURLs["com.apple.Safari"] = URL(fileURLWithPath: "/Applications/Safari.app")
+        let launcher = ShortcutLauncher(workspace: workspace)
+
+        let shortcut = WebShortcut(
+            displayName: "Example",
+            normalizedURLString: "https://example.com/",
+            sourceType: .directURL,
+            launchMode: .specifiedBrowser
+        )
+        shortcut.browserBundleIdentifier = "com.apple.Safari"
+        shortcut.browserProfileDirectory = "Profile 1"
+
+        XCTAssertThrowsError(
+            try launcher.launch(
+                shortcut,
+                storageRoot: URL(fileURLWithPath: "/tmp/WebDock", isDirectory: true)
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? ShortcutLaunchError,
+                .profileRoutingNotSupported("com.apple.Safari")
+            )
+        }
+    }
+
+    @MainActor
     func testSpecifiedBrowserFailsClearlyWhenBrowserIsNotInstalled() throws {
         let workspace = WorkspaceSpy()
         let launcher = ShortcutLauncher(workspace: workspace)
