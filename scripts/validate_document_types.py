@@ -7,7 +7,7 @@ import plistlib
 import sys
 from pathlib import Path
 
-PLIST = Path(__file__).resolve().parents[1] / "Config" / "Info.plist"
+DEFAULT_PLIST = Path(__file__).resolve().parents[1] / "Config" / "Info.plist"
 
 EXPECTED = {
     "crwebloc": "org.chromium.shortcut",
@@ -22,12 +22,16 @@ def fail(message: str) -> None:
 
 
 def main() -> None:
-    with PLIST.open("rb") as handle:
+    plist_path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_PLIST
+    if not plist_path.is_file():
+        fail(f"Info.plist not found: {plist_path}")
+
+    with plist_path.open("rb") as handle:
         plist = plistlib.load(handle)
 
     document_types = plist.get("CFBundleDocumentTypes")
     if not isinstance(document_types, list):
-        fail("CFBundleDocumentTypes is missing")
+        fail(f"CFBundleDocumentTypes is missing in {plist_path}")
 
     found: dict[str, dict] = {}
     for declaration in document_types:
@@ -51,16 +55,11 @@ def main() -> None:
         if declaration.get("LSHandlerRank") != "Alternate":
             fail(f".{extension} must use LSHandlerRank=Alternate")
 
-    # WebDock is a shortcut manager, not a browser. Claiming normal web URL
-    # schemes would put it into default-browser/URL-handler selection and is a
-    # product regression.
     for url_type in plist.get("CFBundleURLTypes", []):
         for scheme in url_type.get("CFBundleURLSchemes", []):
             if str(scheme).lower() in {"http", "https"}:
                 fail("WebDock must not register as an http/https URL handler")
 
-    # Chromium/system own these identifiers. WebDock may consume them but must
-    # never export a competing declaration for the same UTI.
     exported = {
         declaration.get("UTTypeIdentifier")
         for declaration in plist.get("UTExportedTypeDeclarations", [])
@@ -70,7 +69,7 @@ def main() -> None:
     if conflicts:
         fail(f"must not export externally-owned UTIs: {sorted(conflicts)}")
 
-    print("LaunchServices document declarations OK")
+    print(f"LaunchServices document declarations OK: {plist_path}")
     for extension, uti in EXPECTED.items():
         print(f"  .{extension} -> {uti} (Viewer, Alternate)")
 
