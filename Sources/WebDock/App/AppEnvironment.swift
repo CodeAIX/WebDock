@@ -25,7 +25,10 @@ final class AppEnvironment {
             dataStore: dataStore,
             browserCatalog: browserCatalog
         )
-        syncCoordinator = SyncCoordinator(dataStore: dataStore)
+        syncCoordinator = SyncCoordinator(
+            dataStore: dataStore,
+            backupService: backupService
+        )
     }
 }
 
