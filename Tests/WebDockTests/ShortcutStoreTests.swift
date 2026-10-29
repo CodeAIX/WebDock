@@ -1,20 +1,19 @@
-import SwiftData
 import XCTest
 @testable import WebDock
 
 final class ShortcutStoreTests: XCTestCase {
     @MainActor
     func testUpdateStoresPortableBrowserAndAccountIdentity() throws {
-        let container = try makeContainer()
+        let (dataStore, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
         let shortcut = WebShortcut(
             displayName: "Old",
             normalizedURLString: "https://example.com/"
         )
-        container.mainContext.insert(shortcut)
-        try container.mainContext.save()
+        try dataStore.insertShortcut(shortcut)
 
-        let store = ShortcutStore(modelContainer: container)
-        try store.updateMetadata(
+        let store = ShortcutStore(dataStore: dataStore)
+        let updated = try store.updateMetadata(
             shortcut,
             name: "Mail",
             normalizedURL: "https://mail.google.com/",
@@ -22,33 +21,34 @@ final class ShortcutStoreTests: XCTestCase {
             targetAccountEmail: "USER@EXAMPLE.COM"
         )
 
-        XCTAssertEqual(shortcut.displayName, "Mail")
-        XCTAssertEqual(shortcut.preferredBrowserFamily, .chrome)
-        XCTAssertEqual(shortcut.targetAccountEmail, "user@example.com")
+        XCTAssertEqual(updated.displayName, "Mail")
+        XCTAssertEqual(updated.preferredBrowserFamily, .chrome)
+        XCTAssertEqual(updated.targetAccountEmail, "user@example.com")
+        XCTAssertEqual(dataStore.shortcut(id: shortcut.id)?.displayName, "Mail")
     }
 
     @MainActor
     func testDeleteCreatesTombstoneInsteadOfRemovingCanonicalRecord() throws {
-        let container = try makeContainer()
+        let (dataStore, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
         let shortcut = WebShortcut(
             displayName: "Example",
             normalizedURLString: "https://example.com/"
         )
-        container.mainContext.insert(shortcut)
-        try container.mainContext.save()
+        try dataStore.insertShortcut(shortcut)
 
-        let store = ShortcutStore(modelContainer: container)
+        let store = ShortcutStore(dataStore: dataStore)
         try store.delete(shortcut)
 
-        let records = try container.mainContext.fetch(FetchDescriptor<WebShortcut>())
-        XCTAssertEqual(records.count, 1)
-        XCTAssertNotNil(records[0].deletedAt)
-        XCTAssertTrue(try store.orderedActiveShortcuts().isEmpty)
+        XCTAssertEqual(dataStore.shortcuts.count, 1)
+        XCTAssertNotNil(dataStore.shortcuts[0].deletedAt)
+        XCTAssertTrue(store.orderedActiveShortcuts().isEmpty)
     }
 
     @MainActor
     func testDropReorderPersistsActiveShortcutOrder() throws {
-        let container = try makeContainer()
+        let (dataStore, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
         let first = WebShortcut(
             displayName: "One",
             normalizedURLString: "https://one.example/",
@@ -59,24 +59,19 @@ final class ShortcutStoreTests: XCTestCase {
             normalizedURLString: "https://two.example/",
             sortIndex: 1
         )
-        container.mainContext.insert(first)
-        container.mainContext.insert(second)
-        try container.mainContext.save()
+        try dataStore.insertShortcut(first)
+        try dataStore.insertShortcut(second)
 
-        let store = ShortcutStore(modelContainer: container)
+        let store = ShortcutStore(dataStore: dataStore)
         try store.moveForDrop(shortcutID: first.id, onto: second.id)
 
-        let ordered = try store.orderedActiveShortcuts()
-        XCTAssertEqual(ordered.map(\.displayName), ["Two", "One"])
+        XCTAssertEqual(store.orderedActiveShortcuts().map(\.displayName), ["Two", "One"])
     }
 
     @MainActor
-    private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: WebShortcut.self,
-            ShortcutGroup.self,
-            DeviceShortcutBinding.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+    private func makeStore() throws -> (WebDockDataStore, URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WebDockStoreTests-\(UUID().uuidString)", isDirectory: true)
+        return (try WebDockDataStore(rootURL: root), root)
     }
 }
