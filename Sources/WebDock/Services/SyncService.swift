@@ -215,12 +215,14 @@ final class SyncStatusCenter: ObservableObject {
 @MainActor
 final class SyncCoordinator {
     private let dataStore: WebDockDataStore
+    private let backupService: BackupService
     private var observers: [NSObjectProtocol] = []
     private var scheduledTask: Task<Void, Never>?
     private var isSyncing = false
 
-    init(dataStore: WebDockDataStore) {
+    init(dataStore: WebDockDataStore, backupService: BackupService) {
         self.dataStore = dataStore
+        self.backupService = backupService
 
         observers.append(
             NotificationCenter.default.addObserver(
@@ -329,6 +331,11 @@ final class SyncCoordinator {
         let local = dataStore.canonicalSnapshot()
         let remote = try await provider.load() ?? .empty
         let merged = SyncMergeEngine.merge(local: local, remote: remote)
+
+        if merged.shortcuts != local.shortcuts || merged.groups != local.groups {
+            _ = try? backupService.createSafetySnapshot(prefix: "Pre-Sync")
+        }
+
         try dataStore.applyCanonicalSnapshot(merged, notify: false)
         try await provider.save(dataStore.canonicalSnapshot())
     }
