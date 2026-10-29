@@ -1,0 +1,17 @@
+# Xcode
+DerivedData/
+.build/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Local artifacts
+*.zip
