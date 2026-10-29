@@ -1,42 +1,67 @@
-# AGENTS.md — Codex instructions for WebDock
+# AGENTS.md — WebDock implementation rules
 
-Read `docs/SPEC.md` before changing code. Treat it as the product contract.
+Read `docs/SYNC_AND_DEVICE_RESOLUTION.md` and `docs/SPEC.md` before changing product behavior.
 
 ## Priorities
 
-1. Reliability of import and launch.
-2. Preserve Chrome `.crwebloc` behavior and `CrProfile` by retaining and opening the original managed shortcut file.
-3. Never use private Dock APIs or Accessibility hacks to locate the Dock tile.
-4. Avoid destructive file operations. Imports must be transactional and deletions should go through Trash when possible.
-5. Keep the app native: Swift + SwiftUI + AppKit. Do not introduce Electron/Tauri.
-6. Keep third-party dependencies at zero unless there is a strong documented reason.
-7. Do not add an embedded browser/WebView for launching shortcuts.
+1. WebDock is a manual-first website launch-rule manager, not a browser shortcut-file importer.
+2. Portable shortcut identity is `URL + browser family + optional account email`; never use local `Profile N` as synced identity.
+3. Device-local browser/profile resolution must degrade gracefully when a browser/account is missing.
+4. Device-only overrides must never alter another Mac's canonical synced rule.
+5. Keep sync payloads provider-independent. iCloud is first; WebDAV must be able to reuse the same schema.
+6. Keep the app native: Swift + SwiftUI + AppKit. No Electron/Tauri and no embedded WebView.
+7. Never use private Dock APIs or Accessibility hacks to locate the Dock tile.
+8. Keep third-party dependencies at zero unless strongly justified and documented.
 
-## Target
+## Data boundary
 
-- macOS 14+
-- Swift 6 or the current stable Swift mode available in the installed Xcode
-- Bundle ID: `io.github.codeaix.WebDock`
+### Canonical/syncable
+- shortcut UUID
+- display name
+- HTTP/HTTPS URL
+- preferred BrowserFamily
+- optional target account email
+- group/order
+- created/updated/deleted timestamps
 
-## Architecture
+### Device-local only
+- installed browser bundle/path
+- resolved `Default` / `Profile N`
+- detected account/profile display cache
+- warning/resolution status
+- per-Mac overrides
+- favicon/runtime caches
 
-- SwiftUI for views.
-- AppKit for lifecycle, Dock integration, `NSPanel`, `NSWorkspace`, Finder/open-file events.
-- SwiftData for persistence.
-- `OSLog` for diagnostics.
-- Wrap OS integrations behind protocols so tests can mock them.
+No canonical sync payload may contain a local profile directory.
+
+## Browser account matching
+
+For Chromium-family browsers, match accounts using the browser's locally reported signed-in account email:
+- trim surrounding whitespace;
+- case-insensitive comparison via normalized lowercase;
+- do not apply Gmail dot or plus-address rewriting.
+
+If zero matches: use browser default and warn.
+If multiple matches: use browser default and warn until a local override is chosen.
+If browser missing: use system default and warn.
+
+## Sync
+
+- Canonical records use stable UUIDs.
+- Deletions are tombstones so offline devices cannot resurrect records.
+- CloudKit private database is the first provider.
+- WebDAV credentials must eventually live in Keychain, not SwiftData or plaintext configuration.
+- DeviceShortcutBinding must never be uploaded.
 
 ## Workflow
 
-Implement in small, buildable increments. After each meaningful feature:
-
-1. Build.
-2. Run tests.
-3. Commit with a focused message.
-4. Update docs if behavior differs from the spec.
-
-If an Apple API limitation requires changing a non-negotiable requirement, document the evidence first in `docs/DECISIONS.md`; do not silently work around it with private APIs.
+After meaningful changes:
+1. generate the Xcode project;
+2. build/test on macOS CI;
+3. run the Release smoke build;
+4. update architecture/test docs when behavior changes;
+5. do not merge red CI.
 
 ## Definition of Done
 
-Use the acceptance checklist in `docs/SPEC.md` and `docs/TEST_PLAN.md`.
+Use `docs/SPEC.md`, `docs/TEST_PLAN.md`, and Issue #20 acceptance criteria.

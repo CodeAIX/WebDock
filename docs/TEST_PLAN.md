@@ -1,138 +1,115 @@
-# WebDock v0.1 Test Plan
+# WebDock Test Plan — M9
 
-## 1. Automated unit tests
+## Automated unit tests
 
-### ChromeWeblocImporter
+### Canonical model
+- only valid HTTP/HTTPS URLs accepted
+- BrowserFamily persists
+- account email is trimmed/lowercased
+- unsupported/default browser rules do not retain irrelevant account identity
+- canonical tombstone deletion persists
 
-- XML plist with URL + CrProfile -> success.
-- Binary plist with URL + CrProfile -> success.
-- Missing URL -> failure.
-- Invalid URL -> failure.
-- Missing CrProfile -> failure.
-- Empty CrProfile -> failure.
-- http URL -> success.
-- https URL -> success.
-- javascript URL -> failure.
+### Account matching
+- email match succeeds regardless of local Profile number
+- email comparison is case-insensitive
+- zero matches -> none
+- duplicate matches -> ambiguous
+- Gmail dots/plus aliases are not rewritten
 
-### WeblocImporter
+### Device resolution
+- exact account match resolves local Profile directory
+- missing account -> preferred browser default + warning
+- ambiguous account -> preferred browser default + warning
+- missing browser -> system default + warning
+- valid device override takes precedence
+- override is stored only in DeviceShortcutBinding
 
-- XML plist URL -> success.
-- Binary plist URL -> success.
-- missing URL -> failure.
+### Launching
+- system default opens URL normally
+- resolved Chromium profile writes transient URL + CrProfile route
+- missing account opens URL in preferred browser without profile route
+- disappearance of browser between resolution/click falls back safely
 
-### InternetShortcutImporter
+### Sync
+- snapshot contains BrowserFamily/account email
+- snapshot never contains local profile directory or DeviceShortcutBinding
+- UUID identity merges per-record by updatedAt
+- tombstones merge like normal records
+- groups/order round-trip
 
-- UTF-8 `.url` -> success.
-- UTF-16 `.url` -> success.
-- comments/extra keys ignored.
-- unsafe URL schemes rejected.
+### Persistence
+- canonical shortcut survives local SwiftData reload
+- DeviceShortcutBinding can persist locally without appearing in sync snapshot
 
-### ManagedStorage / ImportTransaction
+## CI contract
 
-- creates app support structure.
-- unique UUID destination.
-- move within volume.
-- copy across volume if necessary.
-- rollback after simulated DB failure.
-- rollback after simulated filesystem failure.
-- source remains intact on failed import.
-- delete uses trash abstraction where possible.
+Every branch/PR must:
+- validate Info.plist
+- assert no `.crwebloc`, `.webloc`, `.url` document handlers
+- assert WebDock is not an HTTP/HTTPS handler
+- validate iCloud entitlement plist
+- generate Xcode project
+- compile app/tests
+- pass tests
 
-### Sorting
+Release smoke build must additionally:
+- build Release app
+- validate built Info.plist
+- ad-hoc sign with configured entitlements
+- verify signature/bundle
+- package and integrity-check ZIP
 
-- insert between two items.
-- insert first/last.
-- rebalance.
-- stable after persistence reload.
+## Real-Mac acceptance
 
-### Launcher
+### Core launcher
+1. fresh v0.2 starts with no legacy shortcuts
+2. create via Launcher `+`
+3. create via Manager `+`
+4. reorder and verify persistence after restart
+5. edit/delete and verify UI state
+6. outside-click/Dock-reopen behavior remains correct
 
-Using mocked `WorkspaceOpening`:
+### Account routing
+On Mac A:
+1. choose Chrome + a readable signed-in account email
+2. verify resolution shows the local Profile directory/account
+3. launch into the correct normal Chrome tab/profile
 
-- `.crwebloc` opens managed file URL.
-- `.webloc` normalized/default opens web URL.
-- specified browser opens via target application.
-- external app opens application.
+Missing-account scenario:
+1. set target email not present locally
+2. verify warning badge/editor warning
+3. launch still succeeds in Chrome default profile
 
-## 2. Integration/manual tests
+Ambiguous scenario:
+1. if reproducible, same email in multiple profiles
+2. verify ambiguous warning
+3. choose a device-only override
+4. verify launch uses selected local profile without changing canonical email
 
-### Dock lifecycle
+Missing-browser scenario:
+1. choose browser family unavailable on the Mac
+2. verify warning
+3. verify URL opens in system default browser
 
-- app stopped -> click Dock -> panel appears.
-- app running -> click Dock -> panel toggles.
-- Esc closes.
-- click another app hides.
+## Two-Mac sync acceptance
 
-### Dock position
+Prerequisite: both builds signed/provisioned for `iCloud.io.github.codeaix.WebDock` and signed into iCloud.
 
-Test Dock on:
+1. Mac A Chrome: `account@example.com -> Profile 12`
+2. Mac B Chrome: same email -> `Profile 3`
+3. create shortcut on A with Chrome + `account@example.com`
+4. sync to B
+5. verify B canonical record contains email, not Profile 12
+6. verify B resolves locally to Profile 3
+7. launch and verify correct account
+8. reorder/edit/delete on either Mac and verify propagation
+9. verify a device-only override on B does not modify A
 
-- bottom
-- left
-- right
-- auto-hide on/off
-- external monitor primary/secondary
+## WebDAV future gate
 
-Panel must remain completely visible.
-
-### Drag to Dock icon
-
-For each supported file type:
-
-1. Put shortcut on Desktop.
-2. Drag onto WebDock Dock icon.
-3. Verify source disappears only after successful import.
-4. Verify tile appears.
-5. Quit WebDock.
-6. Reopen and verify tile persists.
-
-### Chrome profile critical test
-
-Create two Chrome profiles with visibly different theme/account state.
-
-Create `.crwebloc` for Profile A.
-
-Import into WebDock.
-
-Click tile.
-
-Pass condition: URL opens in ordinary Chrome UI under Profile A; it must not open as a standalone installed web app.
-
-### ChatGPT regression test
-
-- Open ChatGPT through imported `.crwebloc`.
-- Upload the same local file that previously failed in standalone Chrome Web App mode.
-- Verify upload behaves like a normal Chrome tab.
-
-This is a manual product regression test, not a unit test.
-
-## 3. File safety tests
-
-- simulate destination not writable.
-- simulate filename already exists.
-- simulate DB save failure after staging.
-- simulate app crash after staging; at minimum no permanent source deletion before staging safety is established.
-
-## 4. UI/accessibility tests
-
-- Light mode.
-- Dark mode.
-- Increase Contrast.
-- Reduce Transparency.
-- Reduce Motion.
-- VoiceOver reads tile name and URL host.
-- keyboard only: search, arrows, Return, Esc.
-
-## 5. Performance smoke tests
-
-Generate fake data:
-
-- 100 shortcuts
-- 500 shortcuts
-- 1000 shortcuts
-
-Check launcher open time, search latency, scrolling.
-
-## 6. Release gate
-
-All acceptance criteria in `docs/SPEC.md` must pass before v0.1 is considered complete.
+Before enabling WebDAV:
+- same canonical snapshot encoder/merge engine reused
+- credentials stored in Keychain
+- ETag/If-Match conflict handling tested
+- no Profile N/device binding in payload
+- sync errors never corrupt local canonical data

@@ -23,18 +23,26 @@ struct VisualEffectView: NSViewRepresentable {
 
 struct ShortcutTileView: View {
     let shortcut: WebShortcut
+    let resolution: ShortcutResolution
     let action: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         VStack(spacing: 8) {
-            ZStack {
+            ZStack(alignment: .topTrailing) {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(.quaternary)
                     .frame(width: 60, height: 60)
-                Image(systemName: shortcut.sourceType == .chromeWebloc ? "globe.badge.chevron.backward" : "globe")
+                Image(systemName: "globe")
                     .font(.system(size: 28, weight: .medium))
+                    .frame(width: 60, height: 60)
+                if resolution.hasWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.yellow)
+                        .offset(x: 5, y: -4)
+                }
             }
             Text(shortcut.displayName)
                 .font(.caption)
@@ -50,7 +58,7 @@ struct ShortcutTileView: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
         .onHover { isHovered = $0 }
-        .help(shortcut.normalizedURLString)
+        .help(resolution.warningMessage ?? shortcut.normalizedURLString)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(shortcut.displayName), \(URL(string: shortcut.normalizedURLString)?.host ?? shortcut.normalizedURLString)")
         .accessibilityAddTraits(.isButton)
@@ -92,20 +100,23 @@ struct LauncherView: View {
     let environment: AppEnvironment
     let onOpenManager: () -> Void
 
-    @Query(sort: \WebShortcut.sortIndex) private var shortcuts: [WebShortcut]
+    @Query(sort: \WebShortcut.sortIndex) private var allShortcuts: [WebShortcut]
     @State private var searchText = ""
     @State private var errorMessage: String?
     @State private var draggedShortcutID: UUID?
     @State private var showNewShortcutSheet = false
+
+    private var shortcuts: [WebShortcut] {
+        allShortcuts.filter { $0.deletedAt == nil }
+    }
 
     private var filtered: [WebShortcut] {
         guard !searchText.isEmpty else { return shortcuts }
         return shortcuts.filter {
             $0.displayName.localizedCaseInsensitiveContains(searchText)
             || $0.normalizedURLString.localizedCaseInsensitiveContains(searchText)
-            || ($0.browserProfileHint?.localizedCaseInsensitiveContains(searchText) ?? false)
-            || ($0.browserProfileDisplayName?.localizedCaseInsensitiveContains(searchText) ?? false)
-            || ($0.browserProfileAccountEmail?.localizedCaseInsensitiveContains(searchText) ?? false)
+            || ($0.targetAccountEmail?.localizedCaseInsensitiveContains(searchText) ?? false)
+            || ($0.preferredBrowserFamily?.displayName.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
 
@@ -141,7 +152,7 @@ struct LauncherView: View {
                         systemImage: "globe",
                         description: Text(
                             searchText.isEmpty
-                                ? "Click + to create a shortcut, or drag a .crwebloc, .webloc, or .url file onto WebDock."
+                                ? "Click + to create your first website launch rule."
                                 : "No shortcuts match your search."
                         )
                     )
@@ -152,7 +163,11 @@ struct LauncherView: View {
                             spacing: 16
                         ) {
                             ForEach(filtered, id: \.id) { shortcut in
-                                ShortcutTileView(shortcut: shortcut) {
+                                let resolution = environment.deviceBindingResolver.resolution(for: shortcut)
+                                ShortcutTileView(
+                                    shortcut: shortcut,
+                                    resolution: resolution
+                                ) {
                                     launch(shortcut)
                                 }
                                 .opacity(draggedShortcutID == shortcut.id ? 0.55 : 1)
@@ -202,9 +217,11 @@ struct LauncherView: View {
 
     private func launch(_ shortcut: WebShortcut) {
         do {
+            let resolution = try environment.deviceBindingResolver.refreshBinding(for: shortcut)
             try environment.shortcutLauncher.launch(
                 shortcut,
-                storageRoot: environment.managedStorage.rootURL
+                resolution: resolution,
+                storageRoot: environment.runtimeStorage.rootURL
             )
         } catch {
             errorMessage = error.localizedDescription

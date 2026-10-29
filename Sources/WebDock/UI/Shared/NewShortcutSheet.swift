@@ -2,7 +2,6 @@ import SwiftUI
 
 struct NewShortcutSheet: View {
     private static let defaultBrowserToken = "__WEBDOCK_DEFAULT_BROWSER__"
-    private static let defaultProfileToken = "__WEBDOCK_DEFAULT_PROFILE__"
 
     let environment: AppEnvironment
     var onCreated: ((WebShortcut) -> Void)?
@@ -11,25 +10,18 @@ struct NewShortcutSheet: View {
     @State private var name = ""
     @State private var urlString = ""
     @State private var browserSelection = Self.defaultBrowserToken
-    @State private var profileSelection = Self.defaultProfileToken
+    @State private var accountEmail = ""
     @State private var errorMessage: String?
 
-    private var browsers: [BrowserOption] {
-        environment.browserCatalog.installedBrowsers()
+    private var selectedFamily: BrowserFamily? {
+        browserSelection == Self.defaultBrowserToken
+            ? nil
+            : BrowserFamily(rawValue: browserSelection)
     }
 
-    private var selectedBrowser: BrowserOption? {
-        browsers.first(where: { $0.bundleIdentifier == browserSelection })
-    }
-
-    private var profiles: [BrowserProfileOption] {
-        guard let selectedBrowser, selectedBrowser.supportsProfiles else { return [] }
-        return environment.browserCatalog.profiles(for: selectedBrowser)
-    }
-
-    private var selectedProfile: BrowserProfileOption? {
-        guard profileSelection != Self.defaultProfileToken else { return nil }
-        return profiles.first(where: { $0.profileDirectory == profileSelection })
+    private var localAccounts: [BrowserAccountOption] {
+        guard let selectedFamily, selectedFamily.supportsAccountRouting else { return [] }
+        return environment.browserCatalog.accounts(for: selectedFamily)
     }
 
     var body: some View {
@@ -45,33 +37,32 @@ struct NewShortcutSheet: View {
 
                 Section("Open With") {
                     Picker("Browser", selection: $browserSelection) {
-                        Text("Default Browser")
+                        Text("System Default Browser")
                             .tag(Self.defaultBrowserToken)
-                        ForEach(browsers) { browser in
-                            Text(browser.displayName)
-                                .tag(browser.bundleIdentifier)
+                        ForEach(BrowserFamily.allCases) { family in
+                            Text(family.displayName)
+                                .tag(family.rawValue)
                         }
                     }
 
-                    if let selectedBrowser, selectedBrowser.supportsProfiles {
-                        Picker("Profile / Account", selection: $profileSelection) {
-                            Text("Browser Default / Last Used")
-                                .tag(Self.defaultProfileToken)
-                            ForEach(profiles) { profile in
-                                Text(profile.displayLabel)
-                                    .tag(profile.profileDirectory)
+                    if let selectedFamily, selectedFamily.supportsAccountRouting {
+                        TextField("Account email (optional)", text: $accountEmail)
+
+                        Menu("Choose Local Account…") {
+                            if localAccounts.isEmpty {
+                                Text("No signed-in accounts found on this Mac")
+                            } else {
+                                ForEach(localAccounts) { account in
+                                    Button(account.displayLabel) {
+                                        accountEmail = account.email
+                                    }
+                                }
                             }
                         }
 
-                        if profiles.isEmpty {
-                            Text("No local profiles were found for this browser.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else if selectedBrowser.profileRoutingSupport == .experimentalChromiumWebloc {
-                            Text("Profile-specific launching for this Chromium-based browser is experimental.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text("The account email is the portable identity that syncs between Macs. Local Profile numbers are detected separately on each device and never sync.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -90,9 +81,11 @@ struct NewShortcutSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 520, height: 390)
+        .frame(width: 540, height: 430)
         .onChange(of: browserSelection) { _, _ in
-            profileSelection = Self.defaultProfileToken
+            if selectedFamily?.supportsAccountRouting != true {
+                accountEmail = ""
+            }
         }
         .alert(
             "WebDock",
@@ -112,9 +105,10 @@ struct NewShortcutSheet: View {
             let shortcut = try environment.shortcutCreationService.create(
                 name: name,
                 url: urlString,
-                browser: selectedBrowser,
-                profile: selectedProfile
+                browserFamily: selectedFamily,
+                targetAccountEmail: accountEmail
             )
+            _ = try environment.deviceBindingResolver.refreshBinding(for: shortcut)
             onCreated?(shortcut)
             dismiss()
         } catch {

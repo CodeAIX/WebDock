@@ -4,93 +4,37 @@ import XCTest
 
 final class ShortcutCreationServiceTests: XCTestCase {
     @MainActor
-    func testCreatesDefaultBrowserShortcutAndDerivesNameFromHost() throws {
+    func testCreatesPortableChromeAccountRule() throws {
         let container = try makeContainer()
         let service = ShortcutCreationService(modelContainer: container)
-
-        let shortcut = try service.create(
-            name: "   ",
-            url: "https://example.com/path",
-            browser: nil,
-            profile: nil
-        )
-
-        XCTAssertEqual(shortcut.displayName, "example.com")
-        XCTAssertEqual(shortcut.normalizedURLString, "https://example.com/path")
-        XCTAssertEqual(shortcut.sourceType, .directURL)
-        XCTAssertEqual(shortcut.launchMode, .defaultBrowser)
-        XCTAssertNil(shortcut.browserBundleIdentifier)
-        XCTAssertNil(shortcut.browserProfileDirectory)
-
-        let stored = try container.mainContext.fetch(FetchDescriptor<WebShortcut>())
-        XCTAssertEqual(stored.count, 1)
-    }
-
-    @MainActor
-    func testCreatesChromeProfileShortcutWithReadableAccountMetadata() throws {
-        let container = try makeContainer()
-        let service = ShortcutCreationService(modelContainer: container)
-        let browser = BrowserOption(
-            bundleIdentifier: "com.google.Chrome",
-            displayName: "Google Chrome",
-            chromiumUserDataRelativePath: "Google/Chrome",
-            profileRoutingSupport: .verifiedChromiumWebloc
-        )
-        let profile = BrowserProfileOption(
-            browserBundleIdentifier: "com.google.Chrome",
-            browserDisplayName: "Google Chrome",
-            profileDirectory: "Profile 12",
-            localProfileName: "Research",
-            accountDisplayName: "Research Account",
-            accountEmail: "research@example.com",
-            routingSupport: .verifiedChromiumWebloc
-        )
 
         let shortcut = try service.create(
             name: "ChatGPT",
             url: "https://chatgpt.com/",
-            browser: browser,
-            profile: profile
+            browserFamily: .chrome,
+            targetAccountEmail: "  User@Example.COM  "
         )
 
-        XCTAssertEqual(shortcut.launchMode, .specifiedBrowser)
-        XCTAssertEqual(shortcut.browserBundleIdentifier, "com.google.Chrome")
-        XCTAssertEqual(shortcut.browserDisplayName, "Google Chrome")
-        XCTAssertEqual(shortcut.browserProfileDirectory, "Profile 12")
-        XCTAssertEqual(shortcut.browserProfileDisplayName, "Research Account")
-        XCTAssertEqual(shortcut.browserProfileAccountEmail, "research@example.com")
-        XCTAssertNil(shortcut.managedFileRelativePath)
+        XCTAssertEqual(shortcut.preferredBrowserFamily, .chrome)
+        XCTAssertEqual(shortcut.targetAccountEmail, "user@example.com")
+        XCTAssertEqual(shortcut.normalizedURLString, "https://chatgpt.com/")
     }
 
     @MainActor
-    func testRejectsProfileFromDifferentBrowser() throws {
+    func testDefaultBrowserDropsAccountIdentity() throws {
         let container = try makeContainer()
         let service = ShortcutCreationService(modelContainer: container)
-        let browser = BrowserOption(
-            bundleIdentifier: "com.google.Chrome",
-            displayName: "Google Chrome"
-        )
-        let profile = BrowserProfileOption(
-            browserBundleIdentifier: "com.brave.Browser",
-            browserDisplayName: "Brave Browser",
-            profileDirectory: "Profile 1",
-            localProfileName: "Work",
-            accountDisplayName: nil,
-            accountEmail: nil,
-            routingSupport: .experimentalChromiumWebloc
+
+        let shortcut = try service.create(
+            name: "",
+            url: "https://example.com/path",
+            browserFamily: nil,
+            targetAccountEmail: "user@example.com"
         )
 
-        XCTAssertThrowsError(
-            try service.create(
-                name: "Example",
-                url: "https://example.com/",
-                browser: browser,
-                profile: profile
-            )
-        ) { error in
-            XCTAssertEqual(error as? ShortcutCreationError, .profileBrowserMismatch)
-        }
-        XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<WebShortcut>()).isEmpty)
+        XCTAssertNil(shortcut.preferredBrowserFamily)
+        XCTAssertNil(shortcut.targetAccountEmail)
+        XCTAssertEqual(shortcut.displayName, "example.com")
     }
 
     @MainActor
@@ -99,6 +43,7 @@ final class ShortcutCreationServiceTests: XCTestCase {
         return try ModelContainer(
             for: WebShortcut.self,
             ShortcutGroup.self,
+            DeviceShortcutBinding.self,
             configurations: configuration
         )
     }

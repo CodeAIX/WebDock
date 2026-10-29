@@ -13,37 +13,28 @@ final class ShortcutCreationService {
     func create(
         name proposedName: String,
         url rawURL: String,
-        browser: BrowserOption?,
-        profile: BrowserProfileOption?
+        browserFamily: BrowserFamily?,
+        targetAccountEmail: String?
     ) throws -> WebShortcut {
         let url = try validatedURL(rawURL)
         let name = resolvedName(proposedName, url: url)
-
-        if let profile {
-            guard let browser,
-                  profile.browserBundleIdentifier == browser.bundleIdentifier else {
-                throw ShortcutCreationError.profileBrowserMismatch
-            }
-        }
+        let accountEmail = browserFamily?.supportsAccountRouting == true
+            ? normalizeAccountEmail(targetAccountEmail)
+            : nil
 
         let shortcut = WebShortcut(
             displayName: name,
             normalizedURLString: url.absoluteString,
-            sourceType: .directURL,
-            launchMode: browser == nil ? .defaultBrowser : .specifiedBrowser,
+            preferredBrowserFamily: browserFamily,
+            targetAccountEmail: accountEmail,
             sortIndex: Date().timeIntervalSince1970
         )
-
-        shortcut.browserBundleIdentifier = browser?.bundleIdentifier
-        shortcut.browserDisplayName = browser?.displayName
-        shortcut.browserProfileDirectory = profile?.profileDirectory
-        shortcut.browserProfileDisplayName = profile?.accountDisplayName ?? profile?.localProfileName
-        shortcut.browserProfileAccountEmail = profile?.accountEmail
 
         let context = modelContainer.mainContext
         do {
             context.insert(shortcut)
             try context.save()
+            NotificationCenter.default.post(name: .webDockCanonicalDataDidChange, object: nil)
             return shortcut
         } catch {
             context.rollback()
@@ -75,14 +66,11 @@ final class ShortcutCreationService {
 
 enum ShortcutCreationError: LocalizedError, Equatable {
     case invalidURL
-    case profileBrowserMismatch
 
     var errorDescription: String? {
         switch self {
         case .invalidURL:
             "Enter a valid HTTP or HTTPS URL."
-        case .profileBrowserMismatch:
-            "The selected profile does not belong to the selected browser."
         }
     }
 }

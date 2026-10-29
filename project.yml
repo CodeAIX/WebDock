@@ -26,10 +26,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.codeaix.WebDock
         PRODUCT_NAME: WebDock
-        MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.2.0
+        CURRENT_PROJECT_VERSION: 2
         INFOPLIST_FILE: Config/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Config/WebDock.entitlements
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         COMBINE_HIDPI_IMAGES: YES
@@ -40,10 +41,6 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Tests/WebDockTests
-        excludes:
-          - Fixtures
-      - path: Tests/WebDockTests/Fixtures
-        buildPhase: resources
     dependencies:
       - target: WebDock
     settings:
