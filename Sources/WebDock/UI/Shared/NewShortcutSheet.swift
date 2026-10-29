@@ -12,6 +12,7 @@ struct NewShortcutSheet: View {
     @State private var browserSelection = Self.defaultBrowserToken
     @State private var accountEmail = ""
     @State private var errorMessage: String?
+    @State private var accountAccessRefresh = UUID()
 
     private var selectedFamily: BrowserFamily? {
         browserSelection == Self.defaultBrowserToken
@@ -20,6 +21,7 @@ struct NewShortcutSheet: View {
     }
 
     private var localAccounts: [BrowserAccountOption] {
+        _ = accountAccessRefresh
         guard let selectedFamily, selectedFamily.supportsAccountRouting else { return [] }
         return environment.browserCatalog.accounts(for: selectedFamily)
     }
@@ -50,7 +52,14 @@ struct NewShortcutSheet: View {
 
                         Menu("Choose Local Account…") {
                             if localAccounts.isEmpty {
-                                Text("No signed-in accounts found on this Mac")
+                                Text("No signed-in accounts available")
+                                Button("Request Browser Account Access") {
+                                    environment.browserCatalog.requestProfileAccess(for: selectedFamily)
+                                    accountAccessRefresh = UUID()
+                                }
+                                Button("Open Privacy & Security") {
+                                    environment.browserCatalog.openPrivacySettings()
+                                }
                             } else {
                                 ForEach(localAccounts) { account in
                                     Button(account.displayLabel) {
@@ -60,7 +69,7 @@ struct NewShortcutSheet: View {
                             }
                         }
 
-                        Text("The account email is the portable identity that syncs between Macs. Local Profile numbers are detected separately on each device and never sync.")
+                        Text("The account email is the portable identity used by backups and synchronization. Local Profile numbers are detected separately on each Mac and never sync.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -82,7 +91,7 @@ struct NewShortcutSheet: View {
         }
         .padding(20)
         .frame(width: 540, height: 430)
-        .onChange(of: browserSelection) { _, _ in
+        .onChange(of: browserSelection) { _ in
             if selectedFamily?.supportsAccountRouting != true {
                 accountEmail = ""
             }
