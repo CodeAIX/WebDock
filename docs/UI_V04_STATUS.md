@@ -17,7 +17,7 @@ Review/accept/merge in order; update dependent PR base branches after each merge
 | UI-4 | feat/ui-4-portable-icons | #28 | Shared backup/sync icon payload, validation and safety snapshots |
 | UI-5 | feat/ui-5-interaction-polish | See this branch's PR | Focus, menu, density, accessibility, editor safeguards, diagnostic fixture |
 
-GitHub PR checks are the live authority for remote CI. UI-1–UI-4 CI and smoke builds passed during
+GitHub PR checks are the live authority for remote CI. UI-1–UI-5 CI and smoke builds passed before the final drag correction during
 this run. No phase has been merged or released. Draft status deliberately retains the device gate.
 
 ## Validation established
@@ -32,7 +32,9 @@ this run. No phase has been merged or released. Draft status deliberately retain
   replace canonical state. A test verifies edits during remote GET survive.
 - Isolated XMAC UI checks establish layout/theme/navigation, draft preservation, keyboard focus,
   menus, Return launching Google in the system default Safari, and live public icon discovery. The
-  test-created Safari page was closed afterwards. Five reference icons: ChatGPT 180px, Claude 512px, Google
+  test-created Safari page was closed afterwards. Real drag moved ChatGPT after Google and the
+  resulting order was verified in Canonical.json and survived a real app restart. Drag uses live, reversible reorder with per-session
+  nonce validation rather than depending only on a native drop-finish callback. Five reference icons: ChatGPT 180px, Claude 512px, Google
   192px, DeepSeek 512px, GitHub 512px. Network availability can differ on another Mac.
 
 ## Data and portability

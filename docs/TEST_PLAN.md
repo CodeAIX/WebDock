@@ -191,3 +191,12 @@ Open the generated WebDock UI Validation.app. It uses its own bundle ID, default
 root; background sync/automatic backups/onboarding are disabled. Its public icon requests remain
 active. The fixture is synthetic and does not establish browser-profile or two-device acceptance.
 Normal Release smoke packages contain no validation-library Info.plist key.
+
+### Final XMAC drag correction
+
+The original drop-finish-only route did not submit reliably during local UI automation. UI-5 now
+uses per-session nonce payloads and shared drag state, reorders/persists as a valid dragged tile
+enters another tile, and ignores stale asynchronous payload callbacks. A local real drag moved
+ChatGPT after Google; Canonical.json recorded the resulting order and a real restart preserved it. Cancelled drags retain the
+last live order; reordering back reverses it. External text is not accepted as a shortcut import.
+Ventura drag behavior and repeated restart acceptance remain in the device checklist.

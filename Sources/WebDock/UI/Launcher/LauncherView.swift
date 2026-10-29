@@ -35,8 +35,7 @@ struct ShortcutTileView: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-          VStack(spacing: 8) {
+        VStack(spacing: 8) {
             WebsiteIconView(shortcut: shortcut, resolution: resolution, service: iconService,
                             size: (GridDensity(rawValue: densityRaw) ?? .standard).iconSize,
                             showBrowser: showBrowserBadge, showWarning: showWarningBadge)
@@ -57,8 +56,8 @@ struct ShortcutTileView: View {
         )
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
         .contentShape(Rectangle())
-          }
-        .buttonStyle(.plain)
+        .onTapGesture(perform: action)
+        .accessibilityAction { action() }
         .scaleEffect(isHovered && !reduceMotion ? 1.025 : 1)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isHovered)
         .onHover { isHovered = $0 }
@@ -70,33 +69,55 @@ struct ShortcutTileView: View {
     }
 }
 
+private let shortcutDragType = UTType.text
+
+private final class LauncherDragState: ObservableObject {
+    var sourceID: UUID?
+    var token: String?
+    var generation = 0
+    var requestSequence = 0
+    var lastTargetID: UUID?
+}
+
 private struct ShortcutReorderDropDelegate: DropDelegate {
     let targetID: UUID
     let canReorder: Bool
-    @Binding var draggedShortcutID: UUID?
+    let dragState: LauncherDragState
     let performMove: (UUID, UUID) -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
-        canReorder && draggedShortcutID != nil && draggedShortcutID != targetID
+        canReorder && info.hasItemsConforming(to: [shortcutDragType])
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard validateDrop(info: info), let sourceID = dragState.sourceID,
+              let token = dragState.token, sourceID != targetID, dragState.lastTargetID != targetID,
+              let provider = info.itemProviders(for: [shortcutDragType]).first,
+              provider.canLoadObject(ofClass: NSString.self) else { return }
+        dragState.lastTargetID = targetID
+        dragState.requestSequence += 1
+        let sequence = dragState.requestSequence
+        let generation = dragState.generation
+        provider.loadObject(ofClass: NSString.self) { value, _ in
+            guard let text = value as? String else { return }
+            DispatchQueue.main.async {
+                guard text == token, dragState.generation == generation,
+                      dragState.requestSequence == sequence else { return }
+                performMove(sourceID, targetID)
+            }
+        }
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        guard validateDrop(info: info) else {
-            return DropProposal(operation: .cancel)
-        }
-        return DropProposal(operation: .move)
+        dropEntered(info: info)
+        return DropProposal(operation: validateDrop(info: info) ? .copy : .cancel)
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        guard canReorder,
-              let sourceID = draggedShortcutID,
-              sourceID != targetID else {
-            draggedShortcutID = nil
-            return false
-        }
-
-        performMove(sourceID, targetID)
-        draggedShortcutID = nil
+        guard validateDrop(info: info) else { return false }
+        dragState.sourceID = nil
+        dragState.token = nil
+        dragState.lastTargetID = nil
         return true
     }
 }
@@ -117,7 +138,7 @@ struct LauncherView: View {
     @FocusState private var searchFocused: Bool
     @State private var searchText = ""
     @State private var errorMessage: String?
-    @State private var draggedShortcutID: UUID?
+    @StateObject private var dragState = LauncherDragState()
     @State private var showNewShortcutSheet = false
     @State private var showBrowserAccessOnboarding = false
 
@@ -274,6 +295,12 @@ struct LauncherView: View {
                 showBrowserAccessOnboarding = !environment.isValidation
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            dragState.generation += 1
+            dragState.sourceID = nil
+            dragState.token = nil
+            dragState.lastTargetID = nil
+        }
         .onDeleteCommand {
             if let focusedShortcutID { pendingDelete = filtered.first { $0.id == focusedShortcutID } }
         }
@@ -326,15 +353,19 @@ struct LauncherView: View {
                                 .focused($focusedShortcutID, equals: shortcut.id)
                                 .onMoveCommand { direction in moveFocus(from: shortcut.id, direction: direction, columns: columnCount) }
                                 .contextMenu { shortcutMenu(shortcut) }
-                                .opacity(draggedShortcutID == shortcut.id ? 0.55 : 1)
                                 .onDrag {
                                     guard canReorder else { return NSItemProvider() }
-                                    draggedShortcutID = shortcut.id
-                                    return NSItemProvider(object: shortcut.id.uuidString as NSString)
+                                    dragState.generation += 1
+                                    dragState.requestSequence = 0
+                                    dragState.sourceID = shortcut.id
+                                    dragState.lastTargetID = nil
+                                    let token = "WebDock:" + shortcut.id.uuidString + ":" + UUID().uuidString
+                                    dragState.token = token
+                                    return NSItemProvider(object: token as NSString)
                                 }
-                                .onDrop(of: [UTType.plainText], delegate: ShortcutReorderDropDelegate(
+                                .onDrop(of: [shortcutDragType], delegate: ShortcutReorderDropDelegate(
                                     targetID: shortcut.id, canReorder: canReorder,
-                                    draggedShortcutID: $draggedShortcutID, performMove: moveShortcut))
+                                    dragState: dragState, performMove: moveShortcut))
                             }
                         }
                         .padding(4)

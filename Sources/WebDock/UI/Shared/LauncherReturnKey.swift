@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// AppKit bridge for Return on a focused grid tile (Ventura does not submit arbitrary SwiftUI views).
+/// AppKit bridge for Return/Space on a focused grid tile (Ventura does not submit arbitrary SwiftUI views).
 /// It observes only the containing key window and leaves text editing/menu shortcuts untouched.
 struct LauncherReturnKey: NSViewRepresentable {
     var action: () -> Bool
@@ -22,7 +22,7 @@ struct LauncherReturnKey: NSViewRepresentable {
             guard window != nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self, event.window === self.window, self.window?.isKeyWindow == true,
-                      [36, 76].contains(event.keyCode),
+                      [36, 49, 76].contains(event.keyCode),
                       event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty else { return event }
                 return self.action() ? nil : event
             }
