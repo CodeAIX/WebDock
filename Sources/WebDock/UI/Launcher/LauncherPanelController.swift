@@ -10,7 +10,7 @@ final class LauncherPanel: NSPanel {
 final class LauncherPanelController: NSWindowController {
     private let positionResolver = DockPositionResolver()
 
-    init(environment: AppEnvironment) {
+    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void) {
         let size = NSSize(width: 600, height: 420)
         let panel = LauncherPanel(
             contentRect: NSRect(origin: .zero, size: size),
@@ -25,8 +25,11 @@ final class LauncherPanelController: NSWindowController {
         panel.hidesOnDeactivate = true
         panel.collectionBehavior = [.canJoinAllSpaces, .transient]
 
-        let root = LauncherView(environment: environment)
-            .modelContainer(environment.modelContainer)
+        let root = LauncherView(
+            environment: environment,
+            onOpenManager: onOpenManager
+        )
+        .modelContainer(environment.modelContainer)
         panel.contentView = NSHostingView(rootView: root)
 
         super.init(window: panel)
