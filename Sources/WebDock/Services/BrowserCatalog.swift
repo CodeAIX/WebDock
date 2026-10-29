@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 func normalizeAccountEmail(_ value: String?) -> String? {
@@ -12,6 +13,24 @@ enum BrowserProfileRoutingSupport: String, Codable, Hashable {
     case none
     case verifiedChromiumWebloc
     case experimentalChromiumWebloc
+}
+
+enum BrowserProfileAccessStatus: Equatable {
+    case unknown
+    case notApplicable
+    case authorized(Int)
+    case needsAuthorization
+    case unavailable(String)
+
+    var label: String {
+        switch self {
+        case .unknown: "Not checked"
+        case .notApplicable: "Not required"
+        case .authorized(let count): count == 1 ? "1 profile available" : "\(count) profiles available"
+        case .needsAuthorization: "Account access required"
+        case .unavailable(let message): message
+        }
+    }
 }
 
 struct BrowserOption: Identifiable, Hashable {
@@ -66,9 +85,11 @@ protocol ApplicationLocating: AnyObject {
 extension NSWorkspace: ApplicationLocating {}
 
 @MainActor
-final class BrowserCatalog {
+final class BrowserCatalog: ObservableObject {
     private let workspace: any ApplicationLocating
     private let profileDiscovery: BrowserProfileDiscovery
+
+    @Published private(set) var accessStatuses: [String: BrowserProfileAccessStatus] = [:]
 
     init(
         workspace: (any ApplicationLocating)? = nil,
@@ -79,11 +100,7 @@ final class BrowserCatalog {
     }
 
     private let candidates: [BrowserOption] = [
-        BrowserOption(
-            family: .safari,
-            bundleIdentifier: "com.apple.Safari",
-            displayName: "Safari"
-        ),
+        BrowserOption(family: .safari, bundleIdentifier: "com.apple.Safari", displayName: "Safari"),
         BrowserOption(
             family: .chrome,
             bundleIdentifier: "com.google.Chrome",
@@ -126,11 +143,7 @@ final class BrowserCatalog {
             chromiumUserDataRelativePath: "Microsoft Edge",
             profileRoutingSupport: .experimentalChromiumWebloc
         ),
-        BrowserOption(
-            family: .firefox,
-            bundleIdentifier: "org.mozilla.firefox",
-            displayName: "Firefox"
-        ),
+        BrowserOption(family: .firefox, bundleIdentifier: "org.mozilla.firefox", displayName: "Firefox"),
         BrowserOption(
             family: .brave,
             bundleIdentifier: "com.brave.Browser",
@@ -138,11 +151,7 @@ final class BrowserCatalog {
             chromiumUserDataRelativePath: "BraveSoftware/Brave-Browser",
             profileRoutingSupport: .experimentalChromiumWebloc
         ),
-        BrowserOption(
-            family: .arc,
-            bundleIdentifier: "company.thebrowser.Browser",
-            displayName: "Arc"
-        ),
+        BrowserOption(family: .arc, bundleIdentifier: "company.thebrowser.Browser", displayName: "Arc"),
         BrowserOption(
             family: .vivaldi,
             bundleIdentifier: "com.vivaldi.Vivaldi",
@@ -154,6 +163,10 @@ final class BrowserCatalog {
 
     func installedBrowsers() -> [BrowserOption] {
         candidates.filter(isInstalled)
+    }
+
+    func installedProfileBrowsers() -> [BrowserOption] {
+        installedBrowsers().filter(\.supportsProfiles)
     }
 
     func installedBrowser(for family: BrowserFamily) -> BrowserOption? {
@@ -168,9 +181,57 @@ final class BrowserCatalog {
         workspace.urlForApplication(withBundleIdentifier: browser.bundleIdentifier) != nil
     }
 
+    func accessStatus(for browser: BrowserOption) -> BrowserProfileAccessStatus {
+        guard browser.supportsProfiles else { return .notApplicable }
+        return accessStatuses[browser.bundleIdentifier] ?? .unknown
+    }
+
+    @discardableResult
+    func requestProfileAccess(for browser: BrowserOption) -> BrowserProfileAccessStatus {
+        guard browser.supportsProfiles else {
+            accessStatuses[browser.bundleIdentifier] = .notApplicable
+            return .notApplicable
+        }
+        do {
+            let profiles = try profileDiscovery.discoverProfiles(for: browser)
+            let status: BrowserProfileAccessStatus = .authorized(profiles.count)
+            accessStatuses[browser.bundleIdentifier] = status
+            return status
+        } catch {
+            let status: BrowserProfileAccessStatus
+            if Self.isPermissionError(error) {
+                status = .needsAuthorization
+            } else {
+                status = .unavailable(error.localizedDescription)
+            }
+            accessStatuses[browser.bundleIdentifier] = status
+            return status
+        }
+    }
+
+    func requestProfileAccess(for family: BrowserFamily) {
+        guard let browser = installedBrowser(for: family) else { return }
+        _ = requestProfileAccess(for: browser)
+    }
+
+    func requestAccessForInstalledProfileBrowsers() {
+        for browser in installedProfileBrowsers() {
+            _ = requestProfileAccess(for: browser)
+        }
+    }
+
     func profiles(for browser: BrowserOption) -> [BrowserProfileOption] {
         guard browser.supportsProfiles else { return [] }
-        return (try? profileDiscovery.discoverProfiles(for: browser)) ?? []
+        do {
+            let profiles = try profileDiscovery.discoverProfiles(for: browser)
+            accessStatuses[browser.bundleIdentifier] = .authorized(profiles.count)
+            return profiles
+        } catch {
+            accessStatuses[browser.bundleIdentifier] = Self.isPermissionError(error)
+                ? .needsAuthorization
+                : .unavailable(error.localizedDescription)
+            return []
+        }
     }
 
     func profiles(for family: BrowserFamily) -> [BrowserProfileOption] {
@@ -202,5 +263,31 @@ final class BrowserCatalog {
         return byEmail.values.sorted {
             $0.displayLabel.localizedCaseInsensitiveCompare($1.displayLabel) == .orderedAscending
         }
+    }
+
+    func openPrivacySettings() {
+        let workspace = NSWorkspace.shared
+        let urls = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"
+        ]
+        for raw in urls {
+            if let url = URL(string: raw), workspace.open(url) {
+                return
+            }
+        }
+    }
+
+    private static func isPermissionError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain,
+           nsError.code == NSFileReadNoPermissionError {
+            return true
+        }
+        if nsError.domain == NSPOSIXErrorDomain,
+           nsError.code == Int(EACCES) || nsError.code == Int(EPERM) {
+            return true
+        }
+        return false
     }
 }
