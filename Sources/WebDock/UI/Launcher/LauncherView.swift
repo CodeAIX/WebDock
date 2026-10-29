@@ -1,5 +1,4 @@
 import AppKit
-import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -100,14 +99,22 @@ struct LauncherView: View {
     let environment: AppEnvironment
     let onOpenManager: () -> Void
 
-    @Query(sort: \WebShortcut.sortIndex) private var allShortcuts: [WebShortcut]
+    @ObservedObject private var dataStore: WebDockDataStore
+    @AppStorage("WebDock.browserAccessOnboardingShown") private var onboardingShown = false
     @State private var searchText = ""
     @State private var errorMessage: String?
     @State private var draggedShortcutID: UUID?
     @State private var showNewShortcutSheet = false
+    @State private var showBrowserAccessOnboarding = false
+
+    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void) {
+        self.environment = environment
+        self.onOpenManager = onOpenManager
+        _dataStore = ObservedObject(wrappedValue: environment.dataStore)
+    }
 
     private var shortcuts: [WebShortcut] {
-        allShortcuts.filter { $0.deletedAt == nil }
+        dataStore.activeShortcuts
     }
 
     private var filtered: [WebShortcut] {
@@ -147,14 +154,12 @@ struct LauncherView: View {
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 if filtered.isEmpty {
-                    ContentUnavailableView(
-                        "No Shortcuts",
+                    WebDockEmptyStateView(
+                        title: "No Shortcuts",
                         systemImage: "globe",
-                        description: Text(
-                            searchText.isEmpty
-                                ? "Click + to create your first website launch rule."
-                                : "No shortcuts match your search."
-                        )
+                        message: searchText.isEmpty
+                            ? "Click + to create your first website launch rule."
+                            : "No shortcuts match your search."
                     )
                 } else {
                     ScrollView {
@@ -198,6 +203,14 @@ struct LauncherView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .sheet(isPresented: $showNewShortcutSheet) {
             NewShortcutSheet(environment: environment)
+        }
+        .sheet(isPresented: $showBrowserAccessOnboarding) {
+            BrowserAccessOnboardingView(browserCatalog: environment.browserCatalog)
+        }
+        .onAppear {
+            if !onboardingShown {
+                showBrowserAccessOnboarding = true
+            }
         }
         .onExitCommand {
             NSApp.keyWindow?.orderOut(nil)
