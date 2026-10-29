@@ -22,14 +22,13 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/WebDock
-    info:
-      path: Config/Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.codeaix.WebDock
         PRODUCT_NAME: WebDock
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
+        INFOPLIST_FILE: Config/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES

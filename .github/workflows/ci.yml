@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'feat/**'
+      - 'fix/**'
       - 'chore/**'
   pull_request:
 
@@ -30,11 +31,11 @@ jobs:
             echo "project.yml is not on this ref yet; CI bootstrap check only."
           fi
 
-      - name: Validate LaunchServices declarations
+      - name: Validate source LaunchServices declarations
         if: steps.project.outputs.available == 'true'
         run: |
           plutil -lint Config/Info.plist
-          python3 scripts/validate_document_types.py
+          python3 scripts/validate_document_types.py Config/Info.plist
 
       - name: Select Xcode
         if: steps.project.outputs.available == 'true'
@@ -54,13 +55,20 @@ jobs:
 
       - name: Build and test
         if: steps.project.outputs.available == 'true'
+        env:
+          DERIVED_DATA: ${{ runner.temp }}/WebDockDerivedData
         run: |
-          set -o pipefail
+          set -euo pipefail
           xcodebuild \
             -project WebDock.xcodeproj \
             -scheme WebDock \
             -configuration Debug \
             -destination 'platform=macOS' \
+            -derivedDataPath "$DERIVED_DATA" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             clean test
+
+          APP_PLIST="$DERIVED_DATA/Build/Products/Debug/WebDock.app/Contents/Info.plist"
+          plutil -lint "$APP_PLIST"
+          python3 scripts/validate_document_types.py "$APP_PLIST"
