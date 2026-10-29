@@ -192,10 +192,10 @@ final class SyncCoordinator {
 
     init(
         modelContainer: ModelContainer,
-        cloudKitProvider: CloudKitSyncProvider = CloudKitSyncProvider()
+        cloudKitProvider: CloudKitSyncProvider? = nil
     ) {
         self.modelContainer = modelContainer
-        self.cloudKitProvider = cloudKitProvider
+        self.cloudKitProvider = cloudKitProvider ?? CloudKitSyncProvider()
 
         observers.append(
             NotificationCenter.default.addObserver(
@@ -272,9 +272,6 @@ final class SyncCoordinator {
             SyncStatusCenter.shared.state = .success(Date())
         } catch let error as CKError where error.code == .serverRecordChanged {
             do {
-                // A second device changed the snapshot after our read. Reload,
-                // merge by per-record updatedAt, and retry once instead of
-                // blindly overwriting the newer server record.
                 try await synchronizeWithCloudKit()
                 SyncStatusCenter.shared.state = .success(Date())
             } catch {
