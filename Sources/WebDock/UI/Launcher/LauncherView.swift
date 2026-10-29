@@ -89,7 +89,7 @@ struct LauncherView: View {
                             columns: [GridItem(.adaptive(minimum: 92, maximum: 110), spacing: 12)],
                             spacing: 16
                         ) {
-                            ForEach(filtered) { shortcut in
+                            ForEach(filtered, id: \.id) { shortcut in
                                 ShortcutTileView(shortcut: shortcut) {
                                     try? environment.shortcutLauncher.launch(
                                         shortcut,
