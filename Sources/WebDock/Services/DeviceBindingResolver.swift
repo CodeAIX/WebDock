@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 
 enum AccountProfileMatch {
     case none
@@ -57,23 +56,16 @@ struct ShortcutResolution {
 
 @MainActor
 final class DeviceBindingResolver {
-    private let modelContainer: ModelContainer
+    private let dataStore: WebDockDataStore
     private let browserCatalog: BrowserCatalog
 
-    init(modelContainer: ModelContainer, browserCatalog: BrowserCatalog) {
-        self.modelContainer = modelContainer
+    init(dataStore: WebDockDataStore, browserCatalog: BrowserCatalog) {
+        self.dataStore = dataStore
         self.browserCatalog = browserCatalog
     }
 
     func binding(for shortcutID: UUID) -> DeviceShortcutBinding? {
-        let id = shortcutID
-        var descriptor = FetchDescriptor<DeviceShortcutBinding>(
-            predicate: #Predicate<DeviceShortcutBinding> { binding in
-                binding.shortcutID == id
-            }
-        )
-        descriptor.fetchLimit = 1
-        return try? modelContainer.mainContext.fetch(descriptor).first
+        dataStore.binding(for: shortcutID)
     }
 
     func resolution(for shortcut: WebShortcut) -> ShortcutResolution {
@@ -176,19 +168,14 @@ final class DeviceBindingResolver {
     @discardableResult
     func refreshBinding(for shortcut: WebShortcut) throws -> ShortcutResolution {
         let resolution = resolution(for: shortcut)
-        let context = modelContainer.mainContext
-        let binding = binding(for: shortcut.id) ?? DeviceShortcutBinding(shortcutID: shortcut.id)
-
-        if binding.modelContext == nil {
-            context.insert(binding)
-        }
+        var binding = binding(for: shortcut.id) ?? DeviceShortcutBinding(shortcutID: shortcut.id)
         binding.resolvedBrowserBundleIdentifier = resolution.browser?.bundleIdentifier
         binding.resolvedProfileDirectory = resolution.profile?.profileDirectory
         binding.resolvedAccountEmail = normalizeAccountEmail(resolution.profile?.accountEmail)
         binding.resolutionStatus = resolution.status
         binding.warningMessage = resolution.warningMessage
         binding.updatedAt = Date()
-        try context.save()
+        try dataStore.upsertDeviceBinding(binding)
         return resolution
     }
 
@@ -209,24 +196,20 @@ final class DeviceBindingResolver {
             throw DeviceBindingError.profileNotFound
         }
 
-        let context = modelContainer.mainContext
-        let binding = binding(for: shortcut.id) ?? DeviceShortcutBinding(shortcutID: shortcut.id)
-        if binding.modelContext == nil {
-            context.insert(binding)
-        }
+        var binding = binding(for: shortcut.id) ?? DeviceShortcutBinding(shortcutID: shortcut.id)
         binding.overrideBrowserBundleIdentifier = browserBundleIdentifier
         binding.overrideProfileDirectory = profileDirectory
         binding.updatedAt = Date()
-        try context.save()
+        try dataStore.upsertDeviceBinding(binding)
         _ = try refreshBinding(for: shortcut)
     }
 
     func clearLocalOverride(for shortcut: WebShortcut) throws {
-        guard let binding = binding(for: shortcut.id) else { return }
+        guard var binding = binding(for: shortcut.id) else { return }
         binding.overrideBrowserBundleIdentifier = nil
         binding.overrideProfileDirectory = nil
         binding.updatedAt = Date()
-        try modelContainer.mainContext.save()
+        try dataStore.upsertDeviceBinding(binding)
         _ = try refreshBinding(for: shortcut)
     }
 }
