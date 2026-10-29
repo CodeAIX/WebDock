@@ -11,6 +11,8 @@ struct SettingsView: View {
     @AppStorage(SyncPreferences.webDAVUsernameKey) private var webDAVUsername = ""
 
     @StateObject private var syncStatus = SyncStatusCenter.shared
+    @State private var selectedPage = SettingsPage.general
+    @AppStorage("WebDock.launcherSidebarVisible") private var sidebarVisible = true
     @State private var webDAVPassword = ""
     @State private var errorMessage: String?
     @State private var statusMessage: String?
@@ -31,7 +33,77 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(SettingsPage.allCases) { page in
+                    Button { selectedPage = page; statusMessage = nil } label: {
+                        Label(page.rawValue, systemImage: page.symbol)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(9)
+                            .background(selectedPage == page ? Color.accentColor.opacity(0.16) : .clear,
+                                        in: RoundedRectangle(cornerRadius: 8))
+                    }.buttonStyle(.plain)
+                }
+                Spacer()
+            }.padding(12).frame(width: 190)
+            Divider()
+            VStack(alignment: .leading, spacing: 18) {
+                    Text(selectedPage.rawValue).font(.title2.weight(.semibold))
+                    Form { pageContent }.formStyle(.grouped)
+                    if let statusMessage {
+                        Label(statusMessage, systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                    }
+                }.padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: 780, height: 600)
+        .onAppear {
+            if SyncProviderKind(rawValue: providerRaw) == nil {
+                providerRaw = SyncProviderKind.off.rawValue
+            }
+            loadWebDAVPassword()
+        }
+        .onChange(of: providerRaw) { _ in
+            NotificationCenter.default.post(name: .webDockSyncPreferenceChanged, object: nil)
+        }
+        .confirmationDialog(
+            "Restore WebDock Backup",
+            isPresented: $showRestoreOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Replace Current Library") {
+                restorePendingBackup(mode: .replace)
+            }
+            Button("Merge with Current Library") {
+                restorePendingBackup(mode: .merge)
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRestoreURL = nil
+            }
+        } message: {
+            Text("WebDock creates a local pre-restore snapshot first. Replace also clears device bindings for portable backups; Merge keeps current device bindings and uses newest-record-wins semantics.")
+        }
+        .alert(
+            "WebDock",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Unknown error")
+        }
+    }
+
+    @ViewBuilder private var pageContent: some View {
+        switch selectedPage {
+        case .general:
+            Section("Launcher") {
+                Toggle("Show Launcher sidebar", isOn: $sidebarVisible)
+                Text("Click the Dock icon to open or hide Launcher. Use ⌘1 for Launcher and ⌘2 for Library.")
+                    .foregroundStyle(.secondary)
+            }
+        case .browsers:
             Section("Browsers & Accounts") {
                 if profileBrowsers.isEmpty {
                     Text("No supported Chromium-family browsers are currently installed.")
@@ -53,7 +125,7 @@ struct SettingsView: View {
                     }
                 }
 
-                HStack {
+                VStack(alignment: .leading, spacing: 10) {
                     Button("Request Access to Installed Browsers") {
                         browserCatalog.requestAccessForInstalledProfileBrowsers()
                     }
@@ -66,7 +138,12 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
+            Section("Device Resolution") {
+                Text("Chromium accounts are matched between Macs by signed-in account email, never by local Profile numbers.")
+                Text("If an account is missing, WebDock opens the preferred browser with its default profile and shows a warning. If the browser is missing, WebDock falls back to the system default browser.")
+                    .foregroundStyle(.secondary)
+            }
+        case .sync:
             Section("Sync") {
                 Picker("Provider", selection: $providerRaw) {
                     Text("Off").tag(SyncProviderKind.off.rawValue)
@@ -115,9 +192,9 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
+        case .backup:
             Section("Backup & Restore") {
-                HStack {
+                VStack(alignment: .leading, spacing: 12) {
                     Button("Back Up Now") {
                         createManualBackup()
                     }
@@ -139,65 +216,15 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Section("Device Resolution") {
-                Text("Chromium accounts are matched between Macs by signed-in account email, never by local Profile numbers.")
-                Text("If an account is missing, WebDock opens the preferred browser with its default profile and shows a warning. If the browser is missing, WebDock falls back to the system default browser.")
-                    .foregroundStyle(.secondary)
-            }
-
+        case .appearance:
+            AppearanceSettingsView()
+        case .privacy:
             Section("Privacy") {
                 Text("WebDock reads only browser profile metadata needed to match account names and emails. It does not read cookies, passwords, browsing history, or saved browser credentials.")
                     .foregroundStyle(.secondary)
                 Text("WebDAV passwords live in macOS Keychain. WebDock uses no Apple cloud service entitlement.")
                     .foregroundStyle(.secondary)
             }
-
-            if let statusMessage {
-                Section {
-                    Label(statusMessage, systemImage: "checkmark.circle")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(20)
-        .frame(width: 700, height: 720)
-        .onAppear {
-            if SyncProviderKind(rawValue: providerRaw) == nil {
-                providerRaw = SyncProviderKind.off.rawValue
-            }
-            loadWebDAVPassword()
-        }
-        .onChange(of: providerRaw) { _ in
-            NotificationCenter.default.post(name: .webDockSyncPreferenceChanged, object: nil)
-        }
-        .confirmationDialog(
-            "Restore WebDock Backup",
-            isPresented: $showRestoreOptions,
-            titleVisibility: .visible
-        ) {
-            Button("Replace Current Library") {
-                restorePendingBackup(mode: .replace)
-            }
-            Button("Merge with Current Library") {
-                restorePendingBackup(mode: .merge)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingRestoreURL = nil
-            }
-        } message: {
-            Text("WebDock creates a local pre-restore snapshot first. Replace also clears device bindings for portable backups; Merge keeps current device bindings and uses newest-record-wins semantics.")
-        }
-        .alert(
-            "WebDock",
-            isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage ?? "Unknown error")
         }
     }
 
@@ -277,6 +304,22 @@ struct SettingsView: View {
                 : "Backup merged into the current library."
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum SettingsPage: String, CaseIterable, Identifiable {
+    case general = "General", browsers = "Browsers & Accounts", sync = "Sync"
+    case backup = "Backup & Restore", appearance = "Appearance", privacy = "Privacy"
+    var id: String { rawValue }
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .browsers: "person.crop.circle"
+        case .sync: "arrow.triangle.2.circlepath"
+        case .backup: "externaldrive"
+        case .appearance: "paintbrush"
+        case .privacy: "hand.raised"
         }
     }
 }

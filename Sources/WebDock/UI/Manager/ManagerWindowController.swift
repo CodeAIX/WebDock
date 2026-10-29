@@ -17,7 +17,7 @@ final class ManagerWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
 
         let root = ManagerView(environment: environment)
-        window.contentView = NSHostingView(rootView: root)
+        window.contentView = NSHostingView(rootView: root.modifier(WebDockAppearance()))
 
         super.init(window: window)
     }

@@ -6,6 +6,8 @@ struct ManagerView: View {
     @ObservedObject private var dataStore: WebDockDataStore
     @State private var selectedID: UUID?
     @State private var showNewShortcutSheet = false
+    @State private var searchText = ""
+    @State private var groupFilter: UUID?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -13,7 +15,12 @@ struct ManagerView: View {
     }
 
     private var shortcuts: [WebShortcut] {
-        dataStore.activeShortcuts
+        dataStore.activeShortcuts.filter {
+            (groupFilter == nil || $0.groupID == groupFilter) &&
+            (searchText.isEmpty || $0.displayName.localizedCaseInsensitiveContains(searchText)
+             || $0.normalizedURLString.localizedCaseInsensitiveContains(searchText)
+             || ($0.targetAccountEmail?.localizedCaseInsensitiveContains(searchText) ?? false))
+        }
     }
 
     private var selectedShortcut: WebShortcut? {
@@ -22,7 +29,17 @@ struct ManagerView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        HStack(spacing: 0) {
+            VStack(spacing: 10) {
+                HStack {
+                    TextField("Search library", text: $searchText)
+                    Button { showNewShortcutSheet = true } label: { Image(systemName: "plus") }
+                        .keyboardShortcut("n").help("New Shortcut")
+                }.padding(.horizontal, 12).padding(.top, 12)
+                Picker("Group", selection: $groupFilter) {
+                    Text("All Shortcuts").tag(nil as UUID?)
+                    ForEach(dataStore.activeGroups) { Text($0.name).tag(Optional($0.id)) }
+                }.padding(.horizontal, 12)
             List(selection: $selectedID) {
                 ForEach(shortcuts, id: \.id) { shortcut in
                     ManagerShortcutRow(
@@ -32,9 +49,10 @@ struct ManagerView: View {
                     .tag(shortcut.id)
                 }
             }
-            .navigationTitle("Shortcuts")
-            .frame(minWidth: 240)
-        } detail: {
+            }
+            .frame(width: 240)
+            Divider()
+            Group {
             if let shortcut = selectedShortcut {
                 ShortcutEditorView(
                     shortcut: shortcut,
@@ -51,15 +69,6 @@ struct ManagerView: View {
                     message: "Choose a website launch rule to edit its browser and account settings."
                 )
             }
-        }
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    showNewShortcutSheet = true
-                } label: {
-                    Label("New Shortcut", systemImage: "plus")
-                }
-                .help("New Shortcut")
             }
         }
         .sheet(isPresented: $showNewShortcutSheet) {
@@ -103,7 +112,7 @@ private struct ManagerShortcutRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(shortcut.displayName)
                     .lineLimit(1)
-                Text(URL(string: shortcut.normalizedURLString)?.host ?? shortcut.normalizedURLString)
+                Text(shortcut.displaySubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -126,6 +135,9 @@ private struct ShortcutEditorView: View {
     @State private var urlString: String
     @State private var browserSelection: String
     @State private var accountEmail: String
+    @State private var groupID: UUID?
+    @State private var newGroupName = ""
+    @State private var showNewGroup = false
     @State private var localBrowserSelection = Self.automaticLocalBrowserToken
     @State private var localProfileSelection = Self.defaultLocalProfileToken
     @State private var errorMessage: String?
@@ -148,6 +160,7 @@ private struct ShortcutEditorView: View {
             initialValue: shortcut.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken
         )
         _accountEmail = State(initialValue: shortcut.targetAccountEmail ?? "")
+        _groupID = State(initialValue: shortcut.groupID)
     }
 
     private var selectedFamily: BrowserFamily? {
@@ -185,13 +198,19 @@ private struct ShortcutEditorView: View {
     }
 
     var body: some View {
-        Form {
-            Section("Shortcut") {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            WebDockCard(title: "Shortcut") {
                 TextField("Name", text: $name)
                 TextField("URL", text: $urlString)
+                Picker("Group", selection: $groupID) {
+                    Text("None").tag(nil as UUID?)
+                    ForEach(environment.dataStore.activeGroups) { Text($0.name).tag(Optional($0.id)) }
+                }
+                Button("New Group…") { showNewGroup = true }
             }
 
-            Section("Synced Launch Rule") {
+            WebDockCard(title: "Launch Rule") {
                 Picker("Browser", selection: $browserSelection) {
                     Text("System Default Browser")
                         .tag(Self.defaultBrowserToken)
@@ -202,34 +221,17 @@ private struct ShortcutEditorView: View {
                 }
 
                 if let selectedFamily, selectedFamily.supportsAccountRouting {
-                    TextField("Account Email", text: $accountEmail)
-
-                    Menu("Choose Local Account…") {
-                        if localAccounts.isEmpty {
-                            Text("No signed-in accounts available")
-                            Button("Request Browser Account Access") {
-                                environment.browserCatalog.requestProfileAccess(for: selectedFamily)
-                                accountAccessRefresh = UUID()
-                            }
-                            Button("Open Privacy & Security") {
-                                environment.browserCatalog.openPrivacySettings()
-                            }
-                        } else {
-                            ForEach(localAccounts) { account in
-                                Button(account.displayLabel) {
-                                    accountEmail = account.email
-                                }
-                            }
-                        }
+                    AccountSelectionView(email: $accountEmail, accounts: localAccounts) {
+                        environment.browserCatalog.requestProfileAccess(for: selectedFamily)
+                        accountAccessRefresh = UUID()
                     }
+                    Text("Account mapping is resolved separately on each Mac.")
+                        .font(.caption).foregroundStyle(.secondary)
 
-                    Text("Only the account email is portable. WebDock resolves that account to this Mac's local Profile directory at launch time.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
-            Section("This Mac") {
+            WebDockCard(title: "This Mac") {
                 LabeledContent("Current Resolution") {
                     Text(resolution.summary)
                         .foregroundStyle(.secondary)
@@ -245,7 +247,10 @@ private struct ShortcutEditorView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("Browser Override", selection: $localBrowserSelection) {
+                Picker("Browser Override", selection: Binding(
+                    get: { localBrowserSelection },
+                    set: { localBrowserSelection = $0; localProfileSelection = Self.defaultLocalProfileToken }
+                )) {
                     Text("Automatic from synced rule")
                         .tag(Self.automaticLocalBrowserToken)
                     ForEach(installedBrowsers) { browser in
@@ -266,9 +271,9 @@ private struct ShortcutEditorView: View {
                 }
 
                 HStack {
-                    Button("Apply to This Mac") {
+                    Button("Save Local Override") {
                         applyLocalOverride()
-                    }
+                    }.disabled(!localOverrideChanged)
                     if hasLocalOverride {
                         Button("Clear Local Override") {
                             clearLocalOverride()
@@ -277,9 +282,13 @@ private struct ShortcutEditorView: View {
                 }
             }
 
-            Section {
+            WebDockCard(title: "Actions") {
                 HStack {
-                    Button("Save") {
+                    Button("Test Launch") { testLaunch() }
+                    Button("Duplicate") { duplicate() }
+                }
+                HStack {
+                    Button("Save Changes") {
                         save()
                     }
                     .keyboardShortcut("s", modifiers: [.command])
@@ -297,9 +306,9 @@ private struct ShortcutEditorView: View {
                     }
                 }
             }
+          }.padding(20)
         }
-        .formStyle(.grouped)
-        .padding(12)
+        .textFieldStyle(.roundedBorder)
         .navigationTitle(shortcut.displayName)
         .onAppear(perform: loadLocalOverride)
         .onChange(of: browserSelection) { _ in
@@ -307,8 +316,13 @@ private struct ShortcutEditorView: View {
                 accountEmail = ""
             }
         }
-        .onChange(of: localBrowserSelection) { _ in
-            localProfileSelection = Self.defaultLocalProfileToken
+        .alert("New Group", isPresented: $showNewGroup) {
+            TextField("Group name", text: $newGroupName)
+            Button("Create") {
+                do { groupID = try environment.shortcutStore.createGroup(name: newGroupName).id; newGroupName = "" }
+                catch { errorMessage = error.localizedDescription }
+            }
+            Button("Cancel", role: .cancel) {}
         }
         .confirmationDialog(
             "Delete “\(shortcut.displayName)”?",
@@ -320,7 +334,7 @@ private struct ShortcutEditorView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The deletion is preserved as a tombstone so a stale synchronized copy cannot bring it back.")
+            Text("This shortcut will be removed from your library and synchronized devices.")
         }
         .alert(
             "WebDock",
@@ -335,6 +349,26 @@ private struct ShortcutEditorView: View {
         }
     }
 
+    private var localOverrideChanged: Bool {
+        let binding = environment.deviceBindingResolver.binding(for: shortcut.id)
+        let browser = binding?.overrideBrowserBundleIdentifier ?? Self.automaticLocalBrowserToken
+        let profile = binding?.overrideProfileDirectory ?? Self.defaultLocalProfileToken
+        return browser != localBrowserSelection || profile != localProfileSelection
+    }
+
+    private func testLaunch() {
+        do {
+            let current = environment.dataStore.shortcut(id: shortcut.id) ?? shortcut
+            let resolved = try environment.deviceBindingResolver.refreshBinding(for: current)
+            try environment.shortcutLauncher.launch(current, resolution: resolved, storageRoot: environment.runtimeStorage.rootURL)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func duplicate() {
+        do { _ = try environment.shortcutStore.duplicate(shortcut) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
     private func save() {
         do {
             let updated = try environment.shortcutStore.updateMetadata(
@@ -342,7 +376,8 @@ private struct ShortcutEditorView: View {
                 name: name,
                 normalizedURL: urlString,
                 browserFamily: selectedFamily,
-                targetAccountEmail: accountEmail
+                targetAccountEmail: accountEmail,
+                groupID: groupID
             )
             _ = try environment.deviceBindingResolver.refreshBinding(for: updated)
             name = updated.displayName

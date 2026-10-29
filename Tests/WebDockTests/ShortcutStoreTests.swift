@@ -69,6 +69,29 @@ final class ShortcutStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testDuplicateKeepsPortableRuleButNotLocalBinding() throws {
+        let (dataStore, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = ShortcutStore(dataStore: dataStore)
+        let group = try store.createGroup(name: "Work")
+        let original = WebShortcut(displayName: "Mail", normalizedURLString: "https://example.com/",
+                                  preferredBrowserFamily: .chrome, targetAccountEmail: "a@example.com", groupID: group.id)
+        try dataStore.insertShortcut(original)
+        var binding = DeviceShortcutBinding(shortcutID: original.id)
+        binding.overrideProfileDirectory = "Profile 12"
+        try dataStore.upsertDeviceBinding(binding)
+        let copy = try store.duplicate(original)
+        XCTAssertNotEqual(copy.id, original.id)
+        XCTAssertEqual(copy.groupID, group.id)
+        XCTAssertEqual(copy.targetAccountEmail, original.targetAccountEmail)
+        XCTAssertNil(dataStore.binding(for: copy.id))
+        let reloaded = try WebDockDataStore(rootURL: root)
+        XCTAssertEqual(reloaded.activeGroups.map(\.id), [group.id])
+        XCTAssertEqual(reloaded.activeGroups.first?.name, "Work")
+        XCTAssertEqual(reloaded.activeShortcuts.count, 2)
+    }
+
+    @MainActor
     private func makeStore() throws -> (WebDockDataStore, URL) {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("WebDockStoreTests-\(UUID().uuidString)", isDirectory: true)
