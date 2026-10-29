@@ -98,4 +98,39 @@ final class ImportTransactionTests: XCTestCase {
         }
         XCTAssertTrue(fileManager.fileExists(atPath: source.path))
     }
+
+    func testInvalidStateTransitionsNeverConsumeSource() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("WebDockTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: root) }
+
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("Example.webloc")
+        let payload = Data("user-owned-shortcut".utf8)
+        try payload.write(to: source)
+
+        let storage = try ManagedStorage(
+            rootURL: root.appendingPathComponent("Managed", isDirectory: true)
+        )
+        var transaction = ImportTransaction(
+            sourceURL: source,
+            managedStorage: storage
+        )
+
+        XCTAssertThrowsError(try transaction.install()) { error in
+            guard case ImportTransactionError.invalidState = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertThrowsError(try transaction.consumeSource()) { error in
+            guard case ImportTransactionError.invalidState = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        XCTAssertTrue(fileManager.fileExists(atPath: source.path))
+        XCTAssertEqual(try Data(contentsOf: source), payload)
+        XCTAssertEqual(transaction.state, .initialized)
+    }
 }
