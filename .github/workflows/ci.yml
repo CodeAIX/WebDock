@@ -20,20 +20,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect project definition
+        id: project
+        run: |
+          if [[ -f project.yml ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "project.yml is not on this ref yet; CI bootstrap check only."
+          fi
+
       - name: Select Xcode
+        if: steps.project.outputs.available == 'true'
         run: |
           xcodebuild -version
           swift --version
 
       - name: Install XcodeGen
+        if: steps.project.outputs.available == 'true'
         run: brew install xcodegen
 
       - name: Generate Xcode project
+        if: steps.project.outputs.available == 'true'
         run: |
           xcodegen generate
           xcodebuild -project WebDock.xcodeproj -scheme WebDock -list
 
       - name: Build and test
+        if: steps.project.outputs.available == 'true'
         run: |
           set -o pipefail
           xcodebuild \
