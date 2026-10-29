@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             try bootstrapIfNeeded()
+            try environment?.backupService.performAutomaticBackupIfNeeded()
             environment?.syncCoordinator.start()
             launcherVisibilityState.cancelPendingShow()
             launcherPanelController?.showNearDock()
@@ -72,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let environment = try AppEnvironment()
         self.environment = environment
+        AppEnvironmentRegistry.shared.environment = environment
 
         let manager = ManagerWindowController(environment: environment)
         managerWindowController = manager
