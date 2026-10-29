@@ -3,14 +3,14 @@ name: WebDock
 options:
   minimumXcodeGenVersion: 2.38.0
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "13.0"
   createIntermediateGroups: true
 
 environmentVariableTestSchemes: {}
 
 settings:
   base:
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
     SWIFT_VERSION: "5.0"
     CLANG_ENABLE_MODULES: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -19,18 +19,17 @@ targets:
   WebDock:
     type: application
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "13.0"
     sources:
       - path: Sources/WebDock
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.codeaix.WebDock
         PRODUCT_NAME: WebDock
-        MARKETING_VERSION: 0.2.0
-        CURRENT_PROJECT_VERSION: 2
+        MARKETING_VERSION: 0.3.0
+        CURRENT_PROJECT_VERSION: 3
         INFOPLIST_FILE: Config/Info.plist
         GENERATE_INFOPLIST_FILE: NO
-        CODE_SIGN_ENTITLEMENTS: Config/WebDock.entitlements
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         COMBINE_HIDPI_IMAGES: YES
@@ -38,7 +37,7 @@ targets:
   WebDockTests:
     type: bundle.unit-test
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "13.0"
     sources:
       - path: Tests/WebDockTests
     dependencies:
