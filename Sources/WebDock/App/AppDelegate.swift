@@ -36,16 +36,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    /// LaunchServices calls this for Finder/Open/Dock-delivered documents.
+    /// Import sequentially so each shortcut completes its transaction before
+    /// the next source file is touched. Failures are summarized after the batch
+    /// rather than interrupting subsequent imports with one modal per file.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let importCoordinator = environment?.importCoordinator else { return }
-        Task { @MainActor in
+
+        Task { @MainActor [weak self] in
+            var failures: [(url: URL, message: String)] = []
+
             for url in urls {
                 do {
                     try await importCoordinator.importItem(url)
                 } catch {
-                    NSAlert(error: error).runModal()
+                    failures.append((url, error.localizedDescription))
                 }
             }
+
+            self?.launcherPanelController?.showNearDock()
+
+            guard !failures.isEmpty else { return }
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = failures.count == 1
+                ? "Shortcut Could Not Be Added"
+                : "Some Shortcuts Could Not Be Added"
+            alert.informativeText = failures.map { failure in
+                let name = failure.url.lastPathComponent.isEmpty
+                    ? failure.url.absoluteString
+                    : failure.url.lastPathComponent
+                return "• \(name): \(failure.message)"
+            }
+            .joined(separator: "\n")
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         }
     }
 }
