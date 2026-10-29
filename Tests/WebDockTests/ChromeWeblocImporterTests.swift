@@ -20,8 +20,11 @@ final class ChromeWeblocImporterTests: XCTestCase {
 
         XCTAssertEqual(draft.url.absoluteString, "https://chatgpt.com/")
         XCTAssertEqual(draft.browserProfileHint, "Profile 12")
+        XCTAssertEqual(draft.browserProfileDirectory, "Profile 12")
+        XCTAssertEqual(draft.browserBundleIdentifier, "com.google.Chrome")
+        XCTAssertEqual(draft.browserDisplayName, "Google Chrome")
         XCTAssertEqual(draft.sourceType, .chromeWebloc)
-        XCTAssertEqual(draft.launchMode, .originalShortcutFile)
+        XCTAssertEqual(draft.launchMode, .specifiedBrowser)
     }
 
     func testParsesBinaryPropertyList() async throws {
@@ -48,7 +51,9 @@ final class ChromeWeblocImporterTests: XCTestCase {
         XCTAssertEqual(draft.displayName, "Research")
         XCTAssertEqual(draft.url.absoluteString, "https://pubmed.ncbi.nlm.nih.gov/")
         XCTAssertEqual(draft.browserProfileHint, "Profile 3")
+        XCTAssertEqual(draft.browserProfileDirectory, "Profile 3")
+        XCTAssertEqual(draft.browserBundleIdentifier, "com.google.Chrome")
         XCTAssertEqual(draft.sourceType, .chromeWebloc)
-        XCTAssertEqual(draft.launchMode, .originalShortcutFile)
+        XCTAssertEqual(draft.launchMode, .specifiedBrowser)
     }
 }
