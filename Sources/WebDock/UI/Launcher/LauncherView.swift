@@ -96,6 +96,7 @@ struct LauncherView: View {
     @State private var searchText = ""
     @State private var errorMessage: String?
     @State private var draggedShortcutID: UUID?
+    @State private var showNewShortcutSheet = false
 
     private var filtered: [WebShortcut] {
         guard !searchText.isEmpty else { return shortcuts }
@@ -103,6 +104,8 @@ struct LauncherView: View {
             $0.displayName.localizedCaseInsensitiveContains(searchText)
             || $0.normalizedURLString.localizedCaseInsensitiveContains(searchText)
             || ($0.browserProfileHint?.localizedCaseInsensitiveContains(searchText) ?? false)
+            || ($0.browserProfileDisplayName?.localizedCaseInsensitiveContains(searchText) ?? false)
+            || ($0.browserProfileAccountEmail?.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
 
@@ -115,6 +118,13 @@ struct LauncherView: View {
                         .foregroundStyle(.secondary)
                     TextField("Search websites", text: $searchText)
                         .textFieldStyle(.plain)
+                    Button {
+                        showNewShortcutSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("New shortcut")
                     Button(action: onOpenManager) {
                         Image(systemName: "slider.horizontal.3")
                     }
@@ -131,7 +141,7 @@ struct LauncherView: View {
                         systemImage: "globe",
                         description: Text(
                             searchText.isEmpty
-                                ? "Drag a .crwebloc, .webloc, or .url shortcut onto WebDock."
+                                ? "Click + to create a shortcut, or drag a .crwebloc, .webloc, or .url file onto WebDock."
                                 : "No shortcuts match your search."
                         )
                     )
@@ -171,6 +181,9 @@ struct LauncherView: View {
             .padding(20)
         }
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .sheet(isPresented: $showNewShortcutSheet) {
+            NewShortcutSheet(environment: environment)
+        }
         .onExitCommand {
             NSApp.keyWindow?.orderOut(nil)
         }
