@@ -4,7 +4,7 @@ import XCTest
 
 final class SwiftDataPersistenceTests: XCTestCase {
     @MainActor
-    func testShortcutPersistsAcrossContainerReload() throws {
+    func testPortableShortcutPersistsAcrossContainerReload() throws {
         let fileManager = FileManager.default
         let root = fileManager.temporaryDirectory
             .appendingPathComponent("WebDockSwiftData-\(UUID().uuidString)", isDirectory: true)
@@ -12,7 +12,7 @@ final class SwiftDataPersistenceTests: XCTestCase {
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
 
         let storeURL = root.appendingPathComponent("WebDock.store")
-        let schema = Schema([WebShortcut.self, ShortcutGroup.self])
+        let schema = Schema([WebShortcut.self, ShortcutGroup.self, DeviceShortcutBinding.self])
         let configuration = ModelConfiguration(
             "WebDockTests",
             schema: schema,
@@ -30,12 +30,10 @@ final class SwiftDataPersistenceTests: XCTestCase {
             id: insertedID,
             displayName: "ChatGPT",
             normalizedURLString: "https://chatgpt.com/",
-            sourceType: .chromeWebloc,
-            launchMode: .originalShortcutFile,
+            preferredBrowserFamily: .chrome,
+            targetAccountEmail: "user@example.com",
             sortIndex: 42
         )
-        shortcut.browserProfileHint = "Profile 12"
-        shortcut.managedFileRelativePath = "Shortcuts/\(insertedID.uuidString)/original.crwebloc"
         firstContainer?.mainContext.insert(shortcut)
         try firstContainer?.mainContext.save()
         firstContainer = nil
@@ -51,14 +49,11 @@ final class SwiftDataPersistenceTests: XCTestCase {
             for: schema,
             configurations: secondConfiguration
         )
-        let descriptor = FetchDescriptor<WebShortcut>()
-        let reloaded = try secondContainer.mainContext.fetch(descriptor)
+        let reloaded = try secondContainer.mainContext.fetch(FetchDescriptor<WebShortcut>())
 
         XCTAssertEqual(reloaded.count, 1)
         XCTAssertEqual(reloaded.first?.id, insertedID)
-        XCTAssertEqual(reloaded.first?.displayName, "ChatGPT")
-        XCTAssertEqual(reloaded.first?.browserProfileHint, "Profile 12")
-        XCTAssertEqual(reloaded.first?.launchMode, .originalShortcutFile)
-        XCTAssertEqual(reloaded.first?.sourceType, .chromeWebloc)
+        XCTAssertEqual(reloaded.first?.preferredBrowserFamily, .chrome)
+        XCTAssertEqual(reloaded.first?.targetAccountEmail, "user@example.com")
     }
 }

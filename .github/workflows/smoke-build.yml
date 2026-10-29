@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - 'feat/**'
       - 'fix/**'
       - 'chore/**'
 
@@ -26,9 +27,10 @@ jobs:
           swift --version
           brew install xcodegen
 
-      - name: Validate source LaunchServices contract
+      - name: Validate source contract
         run: |
           plutil -lint Config/Info.plist
+          plutil -lint Config/WebDock.entitlements
           python3 scripts/validate_document_types.py Config/Info.plist
 
       - name: Generate project
@@ -62,9 +64,16 @@ jobs:
       - name: Ad-hoc sign and verify bundle
         run: |
           set -euo pipefail
-          codesign --force --deep --sign - --timestamp=none "$APP_PATH"
+          codesign \
+            --force \
+            --deep \
+            --sign - \
+            --timestamp=none \
+            --entitlements Config/WebDock.entitlements \
+            "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           codesign -dv --verbose=2 "$APP_PATH" 2>&1
+          codesign -d --entitlements :- "$APP_PATH" 2>&1
 
       - name: Package app
         env:

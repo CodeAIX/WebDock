@@ -4,9 +4,13 @@ import SwiftUI
 struct ManagerView: View {
     let environment: AppEnvironment
 
-    @Query(sort: \WebShortcut.sortIndex) private var shortcuts: [WebShortcut]
+    @Query(sort: \WebShortcut.sortIndex) private var allShortcuts: [WebShortcut]
     @State private var selectedID: UUID?
     @State private var showNewShortcutSheet = false
+
+    private var shortcuts: [WebShortcut] {
+        allShortcuts.filter { $0.deletedAt == nil }
+    }
 
     private var selectedShortcut: WebShortcut? {
         guard let selectedID else { return nil }
@@ -17,12 +21,15 @@ struct ManagerView: View {
         NavigationSplitView {
             List(selection: $selectedID) {
                 ForEach(shortcuts, id: \.id) { shortcut in
-                    ManagerShortcutRow(shortcut: shortcut)
-                        .tag(shortcut.id)
+                    ManagerShortcutRow(
+                        shortcut: shortcut,
+                        resolution: environment.deviceBindingResolver.resolution(for: shortcut)
+                    )
+                    .tag(shortcut.id)
                 }
             }
             .navigationTitle("Shortcuts")
-            .frame(minWidth: 230)
+            .frame(minWidth: 240)
         } detail: {
             if let shortcut = selectedShortcut {
                 ShortcutEditorView(
@@ -37,7 +44,7 @@ struct ManagerView: View {
                 ContentUnavailableView(
                     "Select a Shortcut",
                     systemImage: "globe",
-                    description: Text("Choose a website shortcut to edit its settings.")
+                    description: Text("Choose a website launch rule to edit its browser and account settings.")
                 )
             }
         }
@@ -62,9 +69,7 @@ struct ManagerView: View {
             }
         }
         .onChange(of: shortcuts.map(\.id)) { _, ids in
-            if let selectedID, ids.contains(selectedID) {
-                return
-            }
+            if let selectedID, ids.contains(selectedID) { return }
             selectedID = ids.first
         }
     }
@@ -72,15 +77,23 @@ struct ManagerView: View {
 
 private struct ManagerShortcutRow: View {
     let shortcut: WebShortcut
+    let resolution: ShortcutResolution
 
     var body: some View {
         HStack(spacing: 10) {
-            ZStack {
+            ZStack(alignment: .topTrailing) {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.quaternary)
                     .frame(width: 34, height: 34)
-                Image(systemName: shortcut.sourceType == .chromeWebloc ? "globe.badge.chevron.backward" : "globe")
+                Image(systemName: "globe")
                     .font(.system(size: 16, weight: .medium))
+                    .frame(width: 34, height: 34)
+                if resolution.hasWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.yellow)
+                        .offset(x: 4, y: -3)
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -98,7 +111,8 @@ private struct ManagerShortcutRow: View {
 
 private struct ShortcutEditorView: View {
     private static let defaultBrowserToken = "__WEBDOCK_DEFAULT_BROWSER__"
-    private static let defaultProfileToken = "__WEBDOCK_DEFAULT_PROFILE__"
+    private static let automaticLocalBrowserToken = "__WEBDOCK_AUTOMATIC_LOCAL_BROWSER__"
+    private static let defaultLocalProfileToken = "__WEBDOCK_LOCAL_BROWSER_DEFAULT__"
 
     let shortcut: WebShortcut
     let environment: AppEnvironment
@@ -107,10 +121,13 @@ private struct ShortcutEditorView: View {
     @State private var name: String
     @State private var urlString: String
     @State private var browserSelection: String
-    @State private var browserProfileSelection: String
+    @State private var accountEmail: String
+    @State private var localBrowserSelection = Self.automaticLocalBrowserToken
+    @State private var localProfileSelection = Self.defaultLocalProfileToken
     @State private var errorMessage: String?
     @State private var showDeleteConfirmation = false
     @State private var didSave = false
+    @State private var resolutionRefresh = UUID()
 
     init(
         shortcut: WebShortcut,
@@ -123,146 +140,127 @@ private struct ShortcutEditorView: View {
         _name = State(initialValue: shortcut.displayName)
         _urlString = State(initialValue: shortcut.normalizedURLString)
         _browserSelection = State(
-            initialValue: shortcut.browserBundleIdentifier ?? Self.defaultBrowserToken
+            initialValue: shortcut.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken
         )
-        _browserProfileSelection = State(
-            initialValue: shortcut.browserProfileDirectory ?? Self.defaultProfileToken
-        )
+        _accountEmail = State(initialValue: shortcut.targetAccountEmail ?? "")
     }
 
-    private var isOriginalBrowserShortcut: Bool {
-        shortcut.launchMode == .originalShortcutFile
+    private var selectedFamily: BrowserFamily? {
+        browserSelection == Self.defaultBrowserToken
+            ? nil
+            : BrowserFamily(rawValue: browserSelection)
     }
 
-    private var browserOptions: [BrowserOption] {
-        var options = environment.browserCatalog.installedBrowsers()
-        if let currentID = shortcut.browserBundleIdentifier,
-           !options.contains(where: { $0.bundleIdentifier == currentID }) {
-            options.append(
-                BrowserOption(
-                    bundleIdentifier: currentID,
-                    displayName: shortcut.browserDisplayName ?? "Unavailable Browser"
-                )
-            )
-        }
-        return options
+    private var localAccounts: [BrowserAccountOption] {
+        guard let selectedFamily, selectedFamily.supportsAccountRouting else { return [] }
+        return environment.browserCatalog.accounts(for: selectedFamily)
     }
 
-    private var selectedBrowser: BrowserOption? {
-        browserOptions.first(where: { $0.bundleIdentifier == browserSelection })
+    private var installedBrowsers: [BrowserOption] {
+        environment.browserCatalog.installedBrowsers()
     }
 
-    private var profileOptions: [BrowserProfileOption] {
-        guard let selectedBrowser, selectedBrowser.supportsProfiles else { return [] }
-        var options = environment.browserCatalog.profiles(for: selectedBrowser)
-
-        if browserSelection == shortcut.browserBundleIdentifier,
-           let storedDirectory = shortcut.browserProfileDirectory,
-           !options.contains(where: { $0.profileDirectory == storedDirectory }) {
-            options.append(
-                BrowserProfileOption(
-                    browserBundleIdentifier: selectedBrowser.bundleIdentifier,
-                    browserDisplayName: selectedBrowser.displayName,
-                    profileDirectory: storedDirectory,
-                    localProfileName: shortcut.browserProfileDisplayName,
-                    accountDisplayName: shortcut.browserProfileDisplayName,
-                    accountEmail: shortcut.browserProfileAccountEmail,
-                    routingSupport: selectedBrowser.profileRoutingSupport
-                )
-            )
-        }
-        return options
+    private var selectedLocalBrowser: BrowserOption? {
+        installedBrowsers.first(where: { $0.bundleIdentifier == localBrowserSelection })
     }
 
-    private var selectedProfile: BrowserProfileOption? {
-        profileOptions.first(where: { $0.profileDirectory == browserProfileSelection })
+    private var localProfiles: [BrowserProfileOption] {
+        guard let selectedLocalBrowser else { return [] }
+        return environment.browserCatalog.profiles(for: selectedLocalBrowser)
+    }
+
+    private var resolution: ShortcutResolution {
+        _ = resolutionRefresh
+        return environment.deviceBindingResolver.resolution(for: shortcut)
+    }
+
+    private var hasLocalOverride: Bool {
+        environment.deviceBindingResolver.binding(for: shortcut.id)?.overrideBrowserBundleIdentifier != nil
     }
 
     var body: some View {
         Form {
             Section("Shortcut") {
                 TextField("Name", text: $name)
-
-                if isOriginalBrowserShortcut {
-                    LabeledContent("URL") {
-                        Text(shortcut.normalizedURLString)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                } else {
-                    TextField("URL", text: $urlString)
-                }
+                TextField("URL", text: $urlString)
             }
 
-            Section("Open With") {
-                if isOriginalBrowserShortcut {
-                    LabeledContent("Mode") {
-                        Text("Legacy original browser shortcut")
+            Section("Synced Launch Rule") {
+                Picker("Browser", selection: $browserSelection) {
+                    Text("System Default Browser")
+                        .tag(Self.defaultBrowserToken)
+                    ForEach(BrowserFamily.allCases) { family in
+                        Text(family.displayName)
+                            .tag(family.rawValue)
                     }
-                    if let profile = shortcut.browserProfileHint, !profile.isEmpty {
-                        LabeledContent("Profile / Account") {
-                            Text(
-                                environment.browserCatalog.displayLabelForImportedChromeProfile(profile)
-                                    ?? profile
-                            )
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                        }
-                    }
-                    Text("This is a legacy source-preserving item. New imports are normalized into editable URL/browser/profile rules.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Picker("Browser", selection: $browserSelection) {
-                        Text("Default Browser")
-                            .tag(Self.defaultBrowserToken)
-                        ForEach(browserOptions) { browser in
-                            Text(browser.displayName)
-                                .tag(browser.bundleIdentifier)
-                        }
-                    }
+                }
 
-                    if let selectedBrowser, selectedBrowser.supportsProfiles {
-                        Picker("Profile / Account", selection: $browserProfileSelection) {
-                            Text("Browser Default / Last Used")
-                                .tag(Self.defaultProfileToken)
-                            ForEach(profileOptions) { profile in
-                                Text(profile.displayLabel)
-                                    .tag(profile.profileDirectory)
+                if let selectedFamily, selectedFamily.supportsAccountRouting {
+                    TextField("Account Email", text: $accountEmail)
+
+                    Menu("Choose Local Account…") {
+                        if localAccounts.isEmpty {
+                            Text("No signed-in accounts found on this Mac")
+                        } else {
+                            ForEach(localAccounts) { account in
+                                Button(account.displayLabel) {
+                                    accountEmail = account.email
+                                }
                             }
                         }
-
-                        if profileOptions.isEmpty {
-                            Text("No local profiles were found for this browser. WebDock reads only the browser's local profile metadata.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else if selectedBrowser.profileRoutingSupport == .experimentalChromiumWebloc {
-                            Text("Account names are read locally. Profile-specific launching for this Chromium-based browser is experimental; Google Chrome and Chromium are the verified paths.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Account/profile names are read locally from the browser's profile metadata. Cookies and passwords are not accessed.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
                     }
+
+                    Text("Only the account email syncs. WebDock resolves that account to this Mac's local Profile directory at launch time.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Storage") {
-                if let managedURL = environment.shortcutStore.managedSourceURL(for: shortcut) {
-                    LabeledContent("Legacy Source") {
-                        Text(managedURL.lastPathComponent)
-                            .foregroundStyle(.secondary)
+            Section("This Mac") {
+                LabeledContent("Current Resolution") {
+                    Text(resolution.summary)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let warning = resolution.warningMessage {
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption)
+                } else if resolution.usesLocalOverride {
+                    Label("A device-only override is active. It does not sync to other Macs.", systemImage: "desktopcomputer")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker("Browser Override", selection: $localBrowserSelection) {
+                    Text("Automatic from synced rule")
+                        .tag(Self.automaticLocalBrowserToken)
+                    ForEach(installedBrowsers) { browser in
+                        Text(browser.displayName)
+                            .tag(browser.bundleIdentifier)
                     }
-                    Button("Reveal in Finder") {
-                        perform {
-                            try environment.shortcutStore.revealManagedSource(shortcut)
+                }
+
+                if let selectedLocalBrowser, selectedLocalBrowser.supportsProfiles {
+                    Picker("Profile Override", selection: $localProfileSelection) {
+                        Text("Browser Default / Last Used")
+                            .tag(Self.defaultLocalProfileToken)
+                        ForEach(localProfiles) { profile in
+                            Text(profile.displayLabel)
+                                .tag(profile.profileDirectory)
                         }
                     }
-                } else {
-                    Text("This shortcut is stored as an editable WebDock launch rule; no source shortcut file is required.")
-                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Button("Apply to This Mac") {
+                        applyLocalOverride()
+                    }
+                    if hasLocalOverride {
+                        Button("Clear Local Override") {
+                            clearLocalOverride()
+                        }
+                    }
                 }
             }
 
@@ -290,11 +288,14 @@ private struct ShortcutEditorView: View {
         .formStyle(.grouped)
         .padding(12)
         .navigationTitle(shortcut.displayName)
-        .onChange(of: browserSelection) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            if newValue != shortcut.browserBundleIdentifier {
-                browserProfileSelection = Self.defaultProfileToken
+        .onAppear(perform: loadLocalOverride)
+        .onChange(of: browserSelection) { _, _ in
+            if selectedFamily?.supportsAccountRouting != true {
+                accountEmail = ""
             }
+        }
+        .onChange(of: localBrowserSelection) { _, _ in
+            localProfileSelection = Self.defaultLocalProfileToken
         }
         .confirmationDialog(
             "Delete “\(shortcut.displayName)”?",
@@ -306,7 +307,7 @@ private struct ShortcutEditorView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Managed legacy files will be moved to the macOS Trash, not permanently erased.")
+            Text("The deletion is synchronized so the shortcut does not reappear on another device.")
         }
         .alert(
             "WebDock",
@@ -323,28 +324,19 @@ private struct ShortcutEditorView: View {
 
     private func save() {
         do {
-            let selectedBrowser = browserOptions.first(where: {
-                $0.bundleIdentifier == browserSelection
-            })
-            let profile = browserProfileSelection == Self.defaultProfileToken
-                ? nil
-                : selectedProfile
-
             try environment.shortcutStore.updateMetadata(
                 shortcut,
                 name: name,
-                normalizedURL: isOriginalBrowserShortcut ? shortcut.normalizedURLString : urlString,
-                browserBundleIdentifier: isOriginalBrowserShortcut || browserSelection == Self.defaultBrowserToken
-                    ? nil
-                    : browserSelection,
-                browserDisplayName: selectedBrowser?.displayName,
-                browserProfileDirectory: profile?.profileDirectory,
-                browserProfileDisplayName: profile?.accountDisplayName ?? profile?.localProfileName,
-                browserProfileAccountEmail: profile?.accountEmail
+                normalizedURL: urlString,
+                browserFamily: selectedFamily,
+                targetAccountEmail: accountEmail
             )
+            _ = try environment.deviceBindingResolver.refreshBinding(for: shortcut)
             name = shortcut.displayName
             urlString = shortcut.normalizedURLString
-            browserProfileSelection = shortcut.browserProfileDirectory ?? Self.defaultProfileToken
+            browserSelection = shortcut.preferredBrowserFamily?.rawValue ?? Self.defaultBrowserToken
+            accountEmail = shortcut.targetAccountEmail ?? ""
+            resolutionRefresh = UUID()
             didSave = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                 didSave = false
@@ -354,23 +346,51 @@ private struct ShortcutEditorView: View {
         }
     }
 
-    private func deleteShortcut() {
+    private func loadLocalOverride() {
+        guard let binding = environment.deviceBindingResolver.binding(for: shortcut.id),
+              let bundleIdentifier = binding.overrideBrowserBundleIdentifier else {
+            localBrowserSelection = Self.automaticLocalBrowserToken
+            localProfileSelection = Self.defaultLocalProfileToken
+            return
+        }
+        localBrowserSelection = bundleIdentifier
+        localProfileSelection = binding.overrideProfileDirectory ?? Self.defaultLocalProfileToken
+    }
+
+    private func applyLocalOverride() {
         do {
-            try environment.shortcutStore.delete(shortcut)
-            onDeleted()
-        } catch let storeError as ShortcutStoreError {
-            errorMessage = storeError.localizedDescription
-            if case .trashCleanupPending = storeError {
-                onDeleted()
+            if localBrowserSelection == Self.automaticLocalBrowserToken {
+                try environment.deviceBindingResolver.clearLocalOverride(for: shortcut)
+            } else {
+                try environment.deviceBindingResolver.setLocalOverride(
+                    for: shortcut,
+                    browserBundleIdentifier: localBrowserSelection,
+                    profileDirectory: localProfileSelection == Self.defaultLocalProfileToken
+                        ? nil
+                        : localProfileSelection
+                )
             }
+            resolutionRefresh = UUID()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func perform(_ operation: () throws -> Void) {
+    private func clearLocalOverride() {
         do {
-            try operation()
+            try environment.deviceBindingResolver.clearLocalOverride(for: shortcut)
+            localBrowserSelection = Self.automaticLocalBrowserToken
+            localProfileSelection = Self.defaultLocalProfileToken
+            resolutionRefresh = UUID()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteShortcut() {
+        do {
+            try environment.shortcutStore.delete(shortcut)
+            onDeleted()
         } catch {
             errorMessage = error.localizedDescription
         }
