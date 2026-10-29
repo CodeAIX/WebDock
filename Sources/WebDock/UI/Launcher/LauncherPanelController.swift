@@ -9,7 +9,10 @@ final class LauncherPanel: NSPanel {
 @MainActor
 final class LauncherPanelController: NSWindowController {
     private let positionResolver = DockPositionResolver()
-    private var resignActiveObserver: NSObjectProtocol?
+
+    var isVisible: Bool {
+        window?.isVisible == true
+    }
 
     init(environment: AppEnvironment, onOpenManager: @escaping () -> Void) {
         let size = NSSize(width: 600, height: 420)
@@ -24,10 +27,8 @@ final class LauncherPanelController: NSWindowController {
         panel.hasShadow = true
         panel.isFloatingPanel = true
 
-        // Keep visibility under WebDock's control. NSPanel.hidesOnDeactivate can
-        // race with Dock reopen handling: a panel shown by the Dock click can be
-        // immediately hidden by the previous deactivation cycle, producing the
-        // observed "flash then disappear" behavior.
+        // AppDelegate is the sole owner of visibility and activation timing.
+        // The panel must not independently hide or activate the application.
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .transient]
 
@@ -39,44 +40,19 @@ final class LauncherPanelController: NSWindowController {
         panel.contentView = NSHostingView(rootView: root)
 
         super.init(window: panel)
-
-        resignActiveObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.hide()
-            }
-        }
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        if let resignActiveObserver {
-            NotificationCenter.default.removeObserver(resignActiveObserver)
-        }
-    }
-
     func showNearDock() {
         guard let panel = window, let screen = positionResolver.targetScreen() else { return }
         panel.setFrameOrigin(positionResolver.origin(for: panel.frame.size, on: screen))
-        NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
     }
 
     func hide() {
         window?.orderOut(nil)
-    }
-
-    func toggleNearDock() {
-        if window?.isVisible == true {
-            hide()
-        } else {
-            showNearDock()
-        }
     }
 }
