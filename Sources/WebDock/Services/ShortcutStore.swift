@@ -39,9 +39,7 @@ final class ShortcutStore {
     }
 
     func rename(_ shortcut: WebShortcut, to proposedName: String) throws {
-        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw ShortcutStoreError.emptyName }
-
+        let name = try validatedName(proposedName)
         shortcut.displayName = name
         shortcut.updatedAt = Date()
         try saveOrRollback()
@@ -51,15 +49,7 @@ final class ShortcutStore {
         guard shortcut.launchMode != .originalShortcutFile else {
             throw ShortcutStoreError.originalShortcutIsReadOnly
         }
-        guard let url = URL(string: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            throw ShortcutStoreError.invalidURL
-        }
-
-        do {
-            try validateWebURL(url)
-        } catch {
-            throw ShortcutStoreError.invalidURL
-        }
+        let url = try validatedURL(rawValue)
 
         shortcut.normalizedURLString = url.absoluteString
         shortcut.updatedAt = Date()
@@ -74,12 +64,13 @@ final class ShortcutStore {
         guard shortcut.launchMode != .originalShortcutFile else {
             throw ShortcutStoreError.originalShortcutIsReadOnly
         }
+        let browser = try validatedBrowser(
+            bundleIdentifier: bundleIdentifier,
+            displayName: displayName
+        )
 
-        let bundleIdentifier = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !bundleIdentifier.isEmpty else { throw ShortcutStoreError.missingBrowserIdentifier }
-
-        shortcut.browserBundleIdentifier = bundleIdentifier
-        shortcut.browserDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        shortcut.browserBundleIdentifier = browser.bundleIdentifier
+        shortcut.browserDisplayName = browser.displayName
         shortcut.launchMode = .specifiedBrowser
         shortcut.updatedAt = Date()
         try saveOrRollback()
@@ -97,12 +88,52 @@ final class ShortcutStore {
         try saveOrRollback()
     }
 
+    /// Atomically applies the fields editable in Manager. All values are
+    /// validated before any model property is mutated, avoiding partial saves.
+    func updateMetadata(
+        _ shortcut: WebShortcut,
+        name proposedName: String,
+        normalizedURL rawURL: String,
+        browserBundleIdentifier: String?,
+        browserDisplayName: String?
+    ) throws {
+        let name = try validatedName(proposedName)
+
+        if shortcut.launchMode == .originalShortcutFile {
+            guard browserBundleIdentifier == nil,
+                  rawURL.trimmingCharacters(in: .whitespacesAndNewlines) == shortcut.normalizedURLString else {
+                throw ShortcutStoreError.originalShortcutIsReadOnly
+            }
+            shortcut.displayName = name
+            shortcut.updatedAt = Date()
+            try saveOrRollback()
+            return
+        }
+
+        let url = try validatedURL(rawURL)
+        let browser: (bundleIdentifier: String, displayName: String)?
+        if let browserBundleIdentifier {
+            browser = try validatedBrowser(
+                bundleIdentifier: browserBundleIdentifier,
+                displayName: browserDisplayName ?? browserBundleIdentifier
+            )
+        } else {
+            browser = nil
+        }
+
+        shortcut.displayName = name
+        shortcut.normalizedURLString = url.absoluteString
+        shortcut.browserBundleIdentifier = browser?.bundleIdentifier
+        shortcut.browserDisplayName = browser?.displayName
+        shortcut.launchMode = browser == nil ? .defaultBrowser : .specifiedBrowser
+        shortcut.updatedAt = Date()
+        try saveOrRollback()
+    }
+
     /// Moves one item immediately before another and normalizes all sort indexes.
     /// Passing nil as the target appends the item to the end.
     func move(shortcutID: UUID, before targetID: UUID?) throws {
-        var shortcuts = try modelContainer.mainContext.fetch(
-            FetchDescriptor<WebShortcut>(sortBy: [SortDescriptor(\WebShortcut.sortIndex)])
-        )
+        var shortcuts = try orderedShortcuts()
         guard let sourceIndex = shortcuts.firstIndex(where: { $0.id == shortcutID }) else {
             throw ShortcutStoreError.shortcutNotFound
         }
@@ -117,13 +148,26 @@ final class ShortcutStore {
         } else {
             shortcuts.append(moving)
         }
+        try persistOrder(shortcuts)
+    }
 
-        let now = Date()
-        for (index, shortcut) in shortcuts.enumerated() {
-            shortcut.sortIndex = Double(index)
-            shortcut.updatedAt = now
+    /// Natural drag/drop behavior: dragging a preceding item onto a later item
+    /// places it after that target; dragging backward places it before target.
+    func moveForDrop(shortcutID: UUID, onto targetID: UUID) throws {
+        var shortcuts = try orderedShortcuts()
+        guard let sourceIndex = shortcuts.firstIndex(where: { $0.id == shortcutID }),
+              let originalTargetIndex = shortcuts.firstIndex(where: { $0.id == targetID }) else {
+            throw ShortcutStoreError.shortcutNotFound
         }
-        try saveOrRollback()
+        guard sourceIndex != originalTargetIndex else { return }
+
+        let moving = shortcuts.remove(at: sourceIndex)
+        guard let targetIndex = shortcuts.firstIndex(where: { $0.id == targetID }) else {
+            throw ShortcutStoreError.shortcutNotFound
+        }
+        let insertionIndex = sourceIndex < originalTargetIndex ? targetIndex + 1 : targetIndex
+        shortcuts.insert(moving, at: insertionIndex)
+        try persistOrder(shortcuts)
     }
 
     func managedSourceURL(for shortcut: WebShortcut) -> URL? {
@@ -185,6 +229,49 @@ final class ShortcutStore {
             // known WebDock-owned recovery location. Do not permanently delete.
             throw ShortcutStoreError.trashCleanupPending(deletionStaging)
         }
+    }
+
+    private func validatedName(_ proposedName: String) throws -> String {
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw ShortcutStoreError.emptyName }
+        return name
+    }
+
+    private func validatedURL(_ rawValue: String) throws -> URL {
+        guard let url = URL(string: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw ShortcutStoreError.invalidURL
+        }
+        do {
+            try validateWebURL(url)
+            return url
+        } catch {
+            throw ShortcutStoreError.invalidURL
+        }
+    }
+
+    private func validatedBrowser(
+        bundleIdentifier: String,
+        displayName: String
+    ) throws -> (bundleIdentifier: String, displayName: String) {
+        let bundleIdentifier = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !bundleIdentifier.isEmpty else { throw ShortcutStoreError.missingBrowserIdentifier }
+        let displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (bundleIdentifier, displayName.isEmpty ? bundleIdentifier : displayName)
+    }
+
+    private func orderedShortcuts() throws -> [WebShortcut] {
+        try modelContainer.mainContext.fetch(
+            FetchDescriptor<WebShortcut>(sortBy: [SortDescriptor(\WebShortcut.sortIndex)])
+        )
+    }
+
+    private func persistOrder(_ shortcuts: [WebShortcut]) throws {
+        let now = Date()
+        for (index, shortcut) in shortcuts.enumerated() {
+            shortcut.sortIndex = Double(index)
+            shortcut.updatedAt = now
+        }
+        try saveOrRollback()
     }
 
     private func saveOrRollback() throws {
