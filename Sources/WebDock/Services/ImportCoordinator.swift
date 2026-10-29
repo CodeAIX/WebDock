@@ -33,8 +33,9 @@ final class ImportCoordinator {
         )
 
         let context = modelContainer.mainContext
-        var insertedShortcut: WebShortcut?
+        let shortcut: WebShortcut
 
+        // Phase 1: create and verify WebDock-owned state while preserving source.
         do {
             let stagedURL = try transaction.stage()
 
@@ -53,7 +54,7 @@ final class ImportCoordinator {
                 throw ImportCoordinatorError.invalidManagedPath
             }
 
-            let shortcut = WebShortcut(
+            shortcut = WebShortcut(
                 id: id,
                 displayName: originalDraft.displayName,
                 normalizedURLString: originalDraft.url.absoluteString,
@@ -65,38 +66,33 @@ final class ImportCoordinator {
             shortcut.managedFileRelativePath = relativePath
 
             context.insert(shortcut)
-            insertedShortcut = shortcut
             try context.save()
-
-            do {
-                // The source is removed only after both the managed file and
-                // SwiftData record have been committed successfully.
-                try transaction.consumeSource()
-            } catch let sourceRemovalError {
-                // If Finder/iCloud/etc. refuses source deletion, revert the
-                // WebDock-side import and leave the source in place.
-                context.delete(shortcut)
-                do {
-                    try context.save()
-                } catch let rollbackError {
-                    transaction.rollbackManagedArtifacts()
-                    throw ImportCoordinatorError.databaseRollbackFailed(
-                        importError: sourceRemovalError,
-                        rollbackError: rollbackError
-                    )
-                }
-                transaction.rollbackManagedArtifacts()
-                throw sourceRemovalError
-            }
         } catch {
-            // Before source consumption, rollback never needs to recreate the
-            // original because ImportTransaction deliberately leaves it alone.
-            if let insertedShortcut {
-                context.delete(insertedShortcut)
-            }
             context.rollback()
             transaction.rollbackManagedArtifacts()
             throw error
+        }
+
+        // Phase 2: consume the original only after file + database commit.
+        do {
+            try transaction.consumeSource()
+        } catch let sourceRemovalError {
+            // Source still exists here. Prefer reverting the WebDock import.
+            context.delete(shortcut)
+            do {
+                try context.save()
+                transaction.rollbackManagedArtifacts()
+                throw sourceRemovalError
+            } catch let rollbackError {
+                // If the database rollback itself fails, keep the verified
+                // managed copy. This may leave a duplicate source file, but
+                // never a database record pointing to a deleted managed file.
+                context.rollback()
+                throw ImportCoordinatorError.databaseRollbackFailed(
+                    importError: sourceRemovalError,
+                    rollbackError: rollbackError
+                )
+            }
         }
     }
 }
@@ -113,7 +109,7 @@ enum ImportCoordinatorError: LocalizedError {
         case .invalidManagedPath:
             "The shortcut could not be represented inside WebDock managed storage."
         case .databaseRollbackFailed:
-            "WebDock could not roll back its database after an import failure."
+            "WebDock could not roll back its database after an import failure. The original and managed copy were both preserved."
         }
     }
 }
