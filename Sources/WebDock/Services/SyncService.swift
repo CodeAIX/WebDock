@@ -1,8 +1,5 @@
-import CloudKit
 import Combine
 import Foundation
-import Security
-import SwiftData
 
 extension Notification.Name {
     static let webDockCanonicalDataDidChange = Notification.Name("WebDockCanonicalDataDidChange")
@@ -12,7 +9,9 @@ extension Notification.Name {
 
 enum SyncPreferences {
     static let providerKey = "WebDock.syncProvider"
-    static let cloudKitContainerIdentifier = "iCloud.io.github.codeaix.WebDock"
+    static let syncedFolderPathKey = "WebDock.syncedFolderPath"
+    static let webDAVBaseURLKey = "WebDock.webDAVBaseURL"
+    static let webDAVUsernameKey = "WebDock.webDAVUsername"
 
     static var providerKind: SyncProviderKind {
         let raw = UserDefaults.standard.string(forKey: providerKey)
@@ -20,82 +19,8 @@ enum SyncPreferences {
     }
 }
 
-enum CloudKitCapability {
-    static var isAvailable: Bool {
-        guard let task = SecTaskCreateFromSelf(nil),
-              let value = SecTaskCopyValueForEntitlement(
-                task,
-                "com.apple.developer.icloud-services" as CFString,
-                nil
-              ),
-              let services = value as? [String]
-        else {
-            return false
-        }
-
-        return services.contains("CloudKit") || services.contains("CloudKit-Anonymous")
-    }
-}
-
-struct SyncedShortcutRecord: Codable, Equatable, Identifiable {
-    let id: UUID
-    var displayName: String
-    var normalizedURLString: String
-    var preferredBrowserFamilyRaw: String?
-    var targetAccountEmail: String?
-    var groupID: UUID?
-    var sortIndex: Double
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
-
-    init(_ shortcut: WebShortcut) {
-        id = shortcut.id
-        displayName = shortcut.displayName
-        normalizedURLString = shortcut.normalizedURLString
-        preferredBrowserFamilyRaw = shortcut.preferredBrowserFamilyRaw
-        targetAccountEmail = normalizeAccountEmail(shortcut.targetAccountEmail)
-        groupID = shortcut.groupID
-        sortIndex = shortcut.sortIndex
-        createdAt = shortcut.createdAt
-        updatedAt = shortcut.updatedAt
-        deletedAt = shortcut.deletedAt
-    }
-}
-
-struct SyncedGroupRecord: Codable, Equatable, Identifiable {
-    let id: UUID
-    var name: String
-    var sortIndex: Double
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
-
-    init(_ group: ShortcutGroup) {
-        id = group.id
-        name = group.name
-        sortIndex = group.sortIndex
-        createdAt = group.createdAt
-        updatedAt = group.updatedAt
-        deletedAt = group.deletedAt
-    }
-}
-
-struct SyncSnapshot: Codable, Equatable {
-    static let currentSchemaVersion = 1
-
-    var schemaVersion: Int = currentSchemaVersion
-    var shortcuts: [SyncedShortcutRecord]
-    var groups: [SyncedGroupRecord]
-    var generatedAt: Date
-
-    static var empty: SyncSnapshot {
-        SyncSnapshot(shortcuts: [], groups: [], generatedAt: Date(timeIntervalSince1970: 0))
-    }
-}
-
 struct SyncMergeEngine {
-    static func merge(local: SyncSnapshot, remote: SyncSnapshot) -> SyncSnapshot {
+    static func merge(local: CanonicalSnapshot, remote: CanonicalSnapshot) -> CanonicalSnapshot {
         var shortcuts = Dictionary(uniqueKeysWithValues: local.shortcuts.map { ($0.id, $0) })
         for remoteRecord in remote.shortcuts {
             if let localRecord = shortcuts[remoteRecord.id] {
@@ -118,7 +43,7 @@ struct SyncMergeEngine {
             }
         }
 
-        return SyncSnapshot(
+        return CanonicalSnapshot(
             shortcuts: shortcuts.values.sorted { $0.id.uuidString < $1.id.uuidString },
             groups: groups.values.sorted { $0.id.uuidString < $1.id.uuidString },
             generatedAt: Date()
@@ -128,45 +53,132 @@ struct SyncMergeEngine {
 
 @MainActor
 protocol CanonicalSyncProvider: AnyObject {
-    func load() async throws -> SyncSnapshot?
-    func save(_ snapshot: SyncSnapshot) async throws
+    func load() async throws -> CanonicalSnapshot?
+    func save(_ snapshot: CanonicalSnapshot) async throws
 }
 
 @MainActor
-final class CloudKitSyncProvider: CanonicalSyncProvider {
-    private let database: CKDatabase
-    private let recordID = CKRecord.ID(recordName: "canonical-state")
-    private var fetchedRecord: CKRecord?
+final class SyncedFolderProvider: CanonicalSyncProvider {
+    private let folderURL: URL
+    private let fileManager: FileManager
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
 
-    init(containerIdentifier: String = SyncPreferences.cloudKitContainerIdentifier) {
-        database = CKContainer(identifier: containerIdentifier).privateCloudDatabase
+    init(folderURL: URL, fileManager: FileManager = .default) {
+        self.folderURL = folderURL
+        self.fileManager = fileManager
+        encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
     }
 
-    func load() async throws -> SyncSnapshot? {
-        do {
-            let record = try await database.record(for: recordID)
-            fetchedRecord = record
-            guard let data = record["payload"] as? Data else { return nil }
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode(SyncSnapshot.self, from: data)
-        } catch let error as CKError where error.code == .unknownItem {
-            fetchedRecord = nil
+    private var snapshotURL: URL {
+        folderURL.appendingPathComponent("WebDockSync.json", isDirectory: false)
+    }
+
+    func load() async throws -> CanonicalSnapshot? {
+        guard fileManager.fileExists(atPath: snapshotURL.path) else { return nil }
+        let data = try Data(contentsOf: snapshotURL)
+        let snapshot = try decoder.decode(CanonicalSnapshot.self, from: data)
+        guard snapshot.schemaVersion <= CanonicalSnapshot.currentSchemaVersion else {
+            throw SyncError.unsupportedSchema(snapshot.schemaVersion)
+        }
+        return snapshot
+    }
+
+    func save(_ snapshot: CanonicalSnapshot) async throws {
+        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let data = try encoder.encode(snapshot)
+        try data.write(to: snapshotURL, options: .atomic)
+    }
+}
+
+@MainActor
+final class WebDAVProvider: CanonicalSyncProvider {
+    private let fileURL: URL
+    private let username: String
+    private let password: String?
+    private var etag: String?
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+    private let session: URLSession
+
+    init(
+        baseURL: URL,
+        username: String,
+        password: String?,
+        session: URLSession = .shared
+    ) {
+        let normalizedBase = baseURL.absoluteString.hasSuffix("/")
+            ? baseURL
+            : URL(string: baseURL.absoluteString + "/") ?? baseURL
+        fileURL = normalizedBase.appendingPathComponent("WebDockSync.json", isDirectory: false)
+        self.username = username
+        self.password = password
+        self.session = session
+
+        encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+    }
+
+    func load() async throws -> CanonicalSnapshot? {
+        var request = URLRequest(url: fileURL)
+        request.httpMethod = "GET"
+        applyAuthorization(to: &request)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw SyncError.invalidResponse
+        }
+        if http.statusCode == 404 {
+            etag = nil
             return nil
         }
+        guard (200...299).contains(http.statusCode) else {
+            throw SyncError.httpStatus(http.statusCode)
+        }
+        etag = http.value(forHTTPHeaderField: "ETag")
+        let snapshot = try decoder.decode(CanonicalSnapshot.self, from: data)
+        guard snapshot.schemaVersion <= CanonicalSnapshot.currentSchemaVersion else {
+            throw SyncError.unsupportedSchema(snapshot.schemaVersion)
+        }
+        return snapshot
     }
 
-    func save(_ snapshot: SyncSnapshot) async throws {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(snapshot)
+    func save(_ snapshot: CanonicalSnapshot) async throws {
+        var request = URLRequest(url: fileURL)
+        request.httpMethod = "PUT"
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        if let etag {
+            request.setValue(etag, forHTTPHeaderField: "If-Match")
+        } else {
+            request.setValue("*", forHTTPHeaderField: "If-None-Match")
+        }
+        applyAuthorization(to: &request)
+        request.httpBody = try encoder.encode(snapshot)
 
-        let record = fetchedRecord ?? CKRecord(recordType: "WebDockState", recordID: recordID)
-        record["payload"] = data as NSData
-        record["schemaVersion"] = NSNumber(value: SyncSnapshot.currentSchemaVersion)
-        record["updatedAt"] = Date() as NSDate
-        fetchedRecord = try await database.save(record)
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw SyncError.invalidResponse
+        }
+        if http.statusCode == 412 {
+            throw SyncError.conflict
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw SyncError.httpStatus(http.statusCode)
+        }
+        etag = http.value(forHTTPHeaderField: "ETag")
+    }
+
+    private func applyAuthorization(to request: inout URLRequest) {
+        guard !username.isEmpty else { return }
+        let raw = "\(username):\(password ?? "")"
+        let token = Data(raw.utf8).base64EncodedString()
+        request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
     }
 }
 
@@ -202,18 +214,13 @@ final class SyncStatusCenter: ObservableObject {
 
 @MainActor
 final class SyncCoordinator {
-    private let modelContainer: ModelContainer
-    private var cloudKitProvider: CloudKitSyncProvider?
+    private let dataStore: WebDockDataStore
     private var observers: [NSObjectProtocol] = []
     private var scheduledTask: Task<Void, Never>?
     private var isSyncing = false
 
-    init(
-        modelContainer: ModelContainer,
-        cloudKitProvider: CloudKitSyncProvider? = nil
-    ) {
-        self.modelContainer = modelContainer
-        self.cloudKitProvider = cloudKitProvider
+    init(dataStore: WebDockDataStore) {
+        self.dataStore = dataStore
 
         observers.append(
             NotificationCenter.default.addObserver(
@@ -268,22 +275,9 @@ final class SyncCoordinator {
 
     func syncNow() async {
         guard !isSyncing else { return }
-        switch SyncPreferences.providerKind {
-        case .off:
+        guard SyncPreferences.providerKind != .off else {
             SyncStatusCenter.shared.state = .idle
             return
-        case .webDAV:
-            SyncStatusCenter.shared.state = .unavailable(
-                "WebDAV uses the same portable sync schema and is the next provider; iCloud is the active implementation."
-            )
-            return
-        case .iCloud:
-            guard CloudKitCapability.isAvailable else {
-                SyncStatusCenter.shared.state = .unavailable(
-                    "iCloud sync requires an Apple-signed build with a provisioning profile that authorizes CloudKit."
-                )
-                return
-            }
         }
 
         isSyncing = true
@@ -291,11 +285,13 @@ final class SyncCoordinator {
         defer { isSyncing = false }
 
         do {
-            try await synchronizeWithCloudKit()
+            let provider = try makeProvider()
+            try await synchronize(with: provider)
             SyncStatusCenter.shared.state = .success(Date())
-        } catch let error as CKError where error.code == .serverRecordChanged {
+        } catch SyncError.conflict {
             do {
-                try await synchronizeWithCloudKit()
+                let provider = try makeProvider()
+                try await synchronize(with: provider)
                 SyncStatusCenter.shared.state = .success(Date())
             } catch {
                 SyncStatusCenter.shared.state = .failure(error.localizedDescription)
@@ -305,88 +301,58 @@ final class SyncCoordinator {
         }
     }
 
-    private func iCloudProvider() -> CloudKitSyncProvider {
-        if let cloudKitProvider { return cloudKitProvider }
-        let provider = CloudKitSyncProvider()
-        cloudKitProvider = provider
-        return provider
+    private func makeProvider() throws -> any CanonicalSyncProvider {
+        let defaults = UserDefaults.standard
+        switch SyncPreferences.providerKind {
+        case .off:
+            throw SyncError.providerNotConfigured("Sync is turned off.")
+        case .syncedFolder:
+            guard let path = defaults.string(forKey: SyncPreferences.syncedFolderPathKey),
+                  !path.isEmpty else {
+                throw SyncError.providerNotConfigured("Choose a synced folder first.")
+            }
+            return SyncedFolderProvider(folderURL: URL(fileURLWithPath: path, isDirectory: true))
+        case .webDAV:
+            guard let rawURL = defaults.string(forKey: SyncPreferences.webDAVBaseURLKey),
+                  let url = URL(string: rawURL),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http" else {
+                throw SyncError.providerNotConfigured("Enter a valid WebDAV HTTP or HTTPS folder URL.")
+            }
+            let username = defaults.string(forKey: SyncPreferences.webDAVUsernameKey) ?? ""
+            let password = try WebDAVCredentialStore.password(username: username)
+            return WebDAVProvider(baseURL: url, username: username, password: password)
+        }
     }
 
-    private func synchronizeWithCloudKit() async throws {
-        let provider = iCloudProvider()
-        let local = try localSnapshot()
+    private func synchronize(with provider: any CanonicalSyncProvider) async throws {
+        let local = dataStore.canonicalSnapshot()
         let remote = try await provider.load() ?? .empty
         let merged = SyncMergeEngine.merge(local: local, remote: remote)
-        try apply(merged)
-        let refreshed = try localSnapshot()
-        try await provider.save(refreshed)
+        try dataStore.applyCanonicalSnapshot(merged, notify: false)
+        try await provider.save(dataStore.canonicalSnapshot())
     }
+}
 
-    private func localSnapshot() throws -> SyncSnapshot {
-        let context = modelContainer.mainContext
-        let shortcuts = try context.fetch(FetchDescriptor<WebShortcut>())
-        let groups = try context.fetch(FetchDescriptor<ShortcutGroup>())
-        return SyncSnapshot(
-            shortcuts: shortcuts.map(SyncedShortcutRecord.init),
-            groups: groups.map(SyncedGroupRecord.init),
-            generatedAt: Date()
-        )
-    }
+enum SyncError: LocalizedError, Equatable {
+    case invalidResponse
+    case httpStatus(Int)
+    case conflict
+    case unsupportedSchema(Int)
+    case providerNotConfigured(String)
 
-    private func apply(_ snapshot: SyncSnapshot) throws {
-        let context = modelContainer.mainContext
-        let localShortcuts = try context.fetch(FetchDescriptor<WebShortcut>())
-        var shortcutByID = Dictionary(uniqueKeysWithValues: localShortcuts.map { ($0.id, $0) })
-
-        for record in snapshot.shortcuts {
-            let shortcut: WebShortcut
-            if let existing = shortcutByID[record.id] {
-                shortcut = existing
-            } else {
-                shortcut = WebShortcut(
-                    id: record.id,
-                    displayName: record.displayName,
-                    normalizedURLString: record.normalizedURLString,
-                    preferredBrowserFamily: record.preferredBrowserFamilyRaw.flatMap(BrowserFamily.init(rawValue:)),
-                    targetAccountEmail: record.targetAccountEmail,
-                    groupID: record.groupID,
-                    sortIndex: record.sortIndex,
-                    createdAt: record.createdAt,
-                    updatedAt: record.updatedAt,
-                    deletedAt: record.deletedAt
-                )
-                context.insert(shortcut)
-                shortcutByID[record.id] = shortcut
-            }
-            shortcut.displayName = record.displayName
-            shortcut.normalizedURLString = record.normalizedURLString
-            shortcut.preferredBrowserFamilyRaw = record.preferredBrowserFamilyRaw
-            shortcut.targetAccountEmail = normalizeAccountEmail(record.targetAccountEmail)
-            shortcut.groupID = record.groupID
-            shortcut.sortIndex = record.sortIndex
-            shortcut.createdAt = record.createdAt
-            shortcut.updatedAt = record.updatedAt
-            shortcut.deletedAt = record.deletedAt
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse:
+            "The sync server returned an invalid response."
+        case .httpStatus(let code):
+            "The sync server returned HTTP status \(code)."
+        case .conflict:
+            "The remote sync file changed while WebDock was saving it."
+        case .unsupportedSchema(let version):
+            "The sync file uses unsupported schema version \(version)."
+        case .providerNotConfigured(let message):
+            message
         }
-
-        let localGroups = try context.fetch(FetchDescriptor<ShortcutGroup>())
-        var groupByID = Dictionary(uniqueKeysWithValues: localGroups.map { ($0.id, $0) })
-        for record in snapshot.groups {
-            let group: ShortcutGroup
-            if let existing = groupByID[record.id] {
-                group = existing
-            } else {
-                group = ShortcutGroup(id: record.id, name: record.name, sortIndex: record.sortIndex)
-                context.insert(group)
-                groupByID[record.id] = group
-            }
-            group.name = record.name
-            group.sortIndex = record.sortIndex
-            group.createdAt = record.createdAt
-            group.updatedAt = record.updatedAt
-            group.deletedAt = record.deletedAt
-        }
-
-        try context.save()
     }
 }
