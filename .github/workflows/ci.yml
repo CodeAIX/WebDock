@@ -31,12 +31,16 @@ jobs:
             echo "project.yml is not on this ref yet; CI bootstrap check only."
           fi
 
-      - name: Validate source LaunchServices contract
+      - name: Validate source contract
         if: steps.project.outputs.available == 'true'
         run: |
           plutil -lint Config/Info.plist
-          plutil -lint Config/WebDock.entitlements
           python3 scripts/validate_document_types.py Config/Info.plist
+          grep -q 'macOS: "13.0"' project.yml
+          if grep -R -n -E 'CloudKit|com\.apple\.developer\.icloud|import SwiftData' Config project.yml Sources/WebDock; then
+            echo "CloudKit/iCloud entitlement or SwiftData dependency must not return."
+            exit 1
+          fi
 
       - name: Select Xcode
         if: steps.project.outputs.available == 'true'
@@ -54,7 +58,7 @@ jobs:
           xcodegen generate
           xcodebuild -project WebDock.xcodeproj -scheme WebDock -list
 
-      - name: Build and test
+      - name: Build and test for macOS 13 deployment
         if: steps.project.outputs.available == 'true'
         env:
           DERIVED_DATA: ${{ runner.temp }}/WebDockDerivedData
@@ -66,6 +70,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS' \
             -derivedDataPath "$DERIVED_DATA" \
+            MACOSX_DEPLOYMENT_TARGET=13.0 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             clean test
@@ -73,3 +78,4 @@ jobs:
           APP_PLIST="$DERIVED_DATA/Build/Products/Debug/WebDock.app/Contents/Info.plist"
           plutil -lint "$APP_PLIST"
           python3 scripts/validate_document_types.py "$APP_PLIST"
+          test "$(plutil -extract LSMinimumSystemVersion raw "$APP_PLIST")" = "13.0"
