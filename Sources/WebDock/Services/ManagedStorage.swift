@@ -39,6 +39,13 @@ struct ManagedStorage {
         stagingURL.appendingPathComponent(id.uuidString, isDirectory: true)
     }
 
+    /// Reversible holding area used while a database deletion is being committed.
+    /// It intentionally remains inside WebDock's Application Support tree until
+    /// the SwiftData record is gone; only then is it sent to the system Trash.
+    func deletionStagingDirectory(for id: UUID) -> URL {
+        stagingURL.appendingPathComponent("Delete-\(id.uuidString)", isDirectory: true)
+    }
+
     func relativePath(forManagedFile url: URL) -> String? {
         let root = rootURL.standardizedFileURL.path
         let file = url.standardizedFileURL.path
