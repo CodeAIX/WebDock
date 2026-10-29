@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - 'fix/**'
       - 'chore/**'
 
 permissions:
@@ -25,10 +26,10 @@ jobs:
           swift --version
           brew install xcodegen
 
-      - name: Validate LaunchServices contract
+      - name: Validate source LaunchServices contract
         run: |
           plutil -lint Config/Info.plist
-          python3 scripts/validate_document_types.py
+          python3 scripts/validate_document_types.py Config/Info.plist
 
       - name: Generate project
         run: xcodegen generate
@@ -52,13 +53,18 @@ jobs:
           test -d "$APP"
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
+      - name: Verify built LaunchServices contract
+        run: |
+          set -euo pipefail
+          plutil -lint "$APP_PATH/Contents/Info.plist"
+          python3 scripts/validate_document_types.py "$APP_PATH/Contents/Info.plist"
+
       - name: Ad-hoc sign and verify bundle
         run: |
           set -euo pipefail
           codesign --force --deep --sign - --timestamp=none "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           codesign -dv --verbose=2 "$APP_PATH" 2>&1
-          plutil -lint "$APP_PATH/Contents/Info.plist"
 
       - name: Package app
         env:
