@@ -72,20 +72,21 @@ final class ImportCoordinator {
                 // The source is removed only after both the managed file and
                 // SwiftData record have been committed successfully.
                 try transaction.consumeSource()
-            } catch {
+            } catch let sourceRemovalError {
                 // If Finder/iCloud/etc. refuses source deletion, revert the
                 // WebDock-side import and leave the source in place.
                 context.delete(shortcut)
                 do {
                     try context.save()
-                } catch {
+                } catch let rollbackError {
+                    transaction.rollbackManagedArtifacts()
                     throw ImportCoordinatorError.databaseRollbackFailed(
-                        importError: error,
-                        rollbackError: error
+                        importError: sourceRemovalError,
+                        rollbackError: rollbackError
                     )
                 }
                 transaction.rollbackManagedArtifacts()
-                throw error
+                throw sourceRemovalError
             }
         } catch {
             // Before source consumption, rollback never needs to recreate the
