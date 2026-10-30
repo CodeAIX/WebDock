@@ -14,7 +14,8 @@ final class ShortcutStore {
         name proposedName: String,
         normalizedURL rawURL: String,
         browserFamily: BrowserFamily?,
-        targetAccountEmail: String?
+        targetAccountEmail: String?,
+        groupID: UUID? = nil
     ) throws -> WebShortcut {
         let name = try validatedName(proposedName)
         let url = try validatedURL(rawURL)
@@ -22,14 +23,42 @@ final class ShortcutStore {
             ? normalizeAccountEmail(targetAccountEmail)
             : nil
 
-        var updated = shortcut
+        var updated = dataStore.shortcut(id: shortcut.id) ?? shortcut
         updated.displayName = name
         updated.normalizedURLString = url.absoluteString
         updated.preferredBrowserFamily = browserFamily
         updated.targetAccountEmail = email
+        updated.groupID = groupID
         updated.updatedAt = Date()
         try dataStore.updateShortcut(updated)
         return updated
+    }
+
+    @discardableResult
+    func duplicate(_ shortcut: WebShortcut) throws -> WebShortcut {
+        var copy = dataStore.shortcut(id: shortcut.id) ?? shortcut
+        copy.id = UUID()
+        copy.displayName += " Copy"
+        copy.createdAt = Date()
+        copy.updatedAt = copy.createdAt
+        copy.deletedAt = nil
+        copy.sortIndex = (dataStore.activeShortcuts.map(\.sortIndex).max() ?? -1) + 1
+        try dataStore.insertShortcut(copy)
+        return copy
+    }
+
+    @discardableResult
+    func createGroup(name: String) throws -> ShortcutGroup {
+        let group = ShortcutGroup(name: try validatedName(name), sortIndex: Double(dataStore.activeGroups.count))
+        try dataStore.upsertGroup(group)
+        return group
+    }
+
+    func setGroup(_ groupID: UUID?, for shortcut: WebShortcut) throws {
+        var updated = dataStore.shortcut(id: shortcut.id) ?? shortcut
+        updated.groupID = groupID
+        updated.updatedAt = Date()
+        try dataStore.updateShortcut(updated)
     }
 
     func move(shortcutID: UUID, before targetID: UUID?) throws {
@@ -71,7 +100,7 @@ final class ShortcutStore {
     /// Canonical deletions remain tombstones so a stale synced copy cannot
     /// resurrect a record when Synced Folder or WebDAV merges later.
     func delete(_ shortcut: WebShortcut) throws {
-        var updated = shortcut
+        var updated = dataStore.shortcut(id: shortcut.id) ?? shortcut
         let now = Date()
         updated.deletedAt = now
         updated.updatedAt = now
@@ -104,7 +133,7 @@ final class ShortcutStore {
     private func persistOrder(_ shortcuts: [WebShortcut]) throws {
         let now = Date()
         let reordered = shortcuts.enumerated().map { index, shortcut -> WebShortcut in
-            var updated = shortcut
+            var updated = dataStore.shortcut(id: shortcut.id) ?? shortcut
             updated.sortIndex = Double(index)
             updated.updatedAt = now
             return updated

@@ -81,6 +81,12 @@ final class WebDockDataStore: ObservableObject {
         )
     }
 
+    func upsertGroup(_ group: ShortcutGroup) throws {
+        var updated = groups.filter { $0.id != group.id }
+        updated.append(group)
+        try replaceCanonical(shortcuts: shortcuts, groups: updated)
+    }
+
     func insertShortcut(_ shortcut: WebShortcut) throws {
         var updated = shortcuts
         updated.append(shortcut)

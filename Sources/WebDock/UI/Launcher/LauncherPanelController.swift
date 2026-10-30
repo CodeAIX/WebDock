@@ -35,7 +35,7 @@ final class LauncherPanelController: NSWindowController {
             onOpenManager: onOpenManager,
             onPrepareSettings: onPrepareSettings
         )
-        panel.contentView = NSHostingView(rootView: root)
+        panel.contentView = NSHostingView(rootView: root.modifier(WebDockAppearance()))
 
         super.init(window: panel)
     }

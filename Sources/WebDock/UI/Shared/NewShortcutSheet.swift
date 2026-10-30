@@ -48,30 +48,11 @@ struct NewShortcutSheet: View {
                     }
 
                     if let selectedFamily, selectedFamily.supportsAccountRouting {
-                        TextField("Account email (optional)", text: $accountEmail)
-
-                        Menu("Choose Local Account…") {
-                            if localAccounts.isEmpty {
-                                Text("No signed-in accounts available")
-                                Button("Request Browser Account Access") {
-                                    environment.browserCatalog.requestProfileAccess(for: selectedFamily)
-                                    accountAccessRefresh = UUID()
-                                }
-                                Button("Open Privacy & Security") {
-                                    environment.browserCatalog.openPrivacySettings()
-                                }
-                            } else {
-                                ForEach(localAccounts) { account in
-                                    Button(account.displayLabel) {
-                                        accountEmail = account.email
-                                    }
-                                }
-                            }
+                        AccountSelectionView(email: $accountEmail, accounts: localAccounts) {
+                            environment.browserCatalog.requestProfileAccess(for: selectedFamily)
+                            accountAccessRefresh = UUID()
                         }
 
-                        Text("The account email is the portable identity used by backups and synchronization. Local Profile numbers are detected separately on each Mac and never sync.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
             }

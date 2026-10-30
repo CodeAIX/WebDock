@@ -138,3 +138,12 @@ Run on current Apple Silicon macOS and Intel macOS 13.6.9, in light and dark app
     placement near each Dock edge and on smaller/multiple displays (default size 780 × 520).
 
 Build/test and universal package checks do not establish these visual or browser-routing results.
+
+## UI-2 Library and Settings acceptance
+
+Pending on both target Macs: verify Library content + action is visible without a system toolbar;
+search and group filters; four editor cards; account default/local/manual email choices; saved
+local overrides (Apply disabled when unchanged); group creation; duplicate excludes local binding;
+Save/Delete/Test Launch. Verify each Settings page (General, Browsers & Accounts, Sync,
+Backup & Restore, Appearance, Privacy), light/dark/System themes, scrolling at 780 × 600,
+Keychain credential save, sync and backup/restore dialogs. Existing services retain their semantics.

@@ -7,7 +7,7 @@ struct WebDockApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsRootView()
+            SettingsRootView().modifier(WebDockAppearance())
         }
         .commands {
             CommandGroup(after: .windowArrangement) {
