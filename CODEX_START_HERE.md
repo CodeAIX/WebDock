@@ -11,8 +11,9 @@ Continue **WebDock**, a native macOS launcher for portable website launch rules.
 5. `docs/TEST_PLAN.md`
 6. `docs/DEVICE_ACCEPTANCE.md`
 
-The current candidate is 0.4.1 (7). UI-1 through UI-5 and the XMAC feedback patch are implemented
-in stacked draft PRs #25–30. The user accepted the globe-and-Dock icon on 2026-10-30. Check live
+The release target is 0.5.0 (8), promoted from validated 0.4.1 (7) without runtime behavior changes.
+UI-1 through UI-5 and the feedback patch are tracked in PRs #25–30. The user accepted the icon,
+confirmed Intel macOS 13.6.9 validation passed and explicitly authorized GitHub release on 2026-10-30. Check live
 branch heads and CI before acting; implementation, automated checks and real-device acceptance
 are separate states. Do not restart the historical bootstrap/import milestones.
 
@@ -29,11 +30,10 @@ and host without launching the app or reading browser profiles/library data.
 
 ## Remaining gates
 
-Native Intel macOS 13.6.9, real account permission/profile routing, real two-Mac Synced Folder /
-WebDAV and VoiceOver acceptance remain open. Loopback HTTP tests are automated transport evidence,
-not two-device or production-server acceptance. Follow the device checklist before merge/release.
-User authorization covers continuing the remaining work; avoid repetitive confirmation for routine
-implementation and checks. Keep drafts while required real-device gates remain unverified.
+Intel macOS 13.6.9 validation is passed by user report. The user has authorized merging and releasing
+0.5.0. Additional real two-Mac/provider/account and VoiceOver results were not separately supplied;
+retain that distinction. Loopback HTTP tests are transport evidence, not production-server or
+two-device acceptance. See docs/RELEASE_0.5.0.md for source/artifact contracts and release context.
 
 Portable identity is URL + browser family + optional email. Profile N stays device-local. There
 are no shortcut-file import handlers, SwiftData, Apple cloud providers or cloud entitlements.
