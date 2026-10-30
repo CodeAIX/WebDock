@@ -75,6 +75,10 @@ Synchronization transports portable rules and referenced icon assets, excluding 
 - no private Dock APIs or Accessibility hacks
 - no Apple cloud entitlement
 
+Build with Xcode 26 or later and XcodeGen; the icon source uses Apple's `.icon` format.
+The deployment target remains macOS 13.0. A standalone ICNS and reproduction notes are in
+Design/AppIcon/.
+
 ## Architecture docs
 
 Start with:

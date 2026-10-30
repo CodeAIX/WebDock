@@ -1,4 +1,4 @@
-# WebDock 0.4.1 (5) — XMAC feedback follow-up
+# WebDock 0.4.1 (6) — XMAC feedback follow-up
 
 Date: 2026-10-30. Base: UI-5 commit 4852fed. Branch: feat/v0.4.1-branding-localization.
 The user reports XMAC validation is basically normal, with three remaining issues. This branch
@@ -6,10 +6,13 @@ addresses those issues without changing launch rules, storage schema, browser ro
 
 ## Changes
 
-1. **Application icon**: a new blue/indigo mark combines three browser windows and a dock shelf.
-   The generated master and exact prompt are in Design/AppIcon/. A macOS AppIcon asset catalog
-   contains every 16–1024px slot. Xcode compiles AppIcon.icns and Assets.car, referenced by the built
-   app's CFBundleIconFile/CFBundleIconName. The native About panel was checked with version 0.4.1 (5).
+1. **Application icon**: the user rejected build 5's browser-window mark and its white backing.
+   Build 6 uses the user's uploaded globe-and-Dock artwork, with exterior white background removed
+   using built-in image_gen. Design/AppIcon/ contains the transparent master, exact final prompt,
+   and a standalone WebDock.icns with ten 16–1024px representations. Standard WebDock.icon source
+   fills the modern system mask; Xcode builds Assets.car and compatibility WebDock.icns. The native
+   About panel at 0.4.1 (6) was checked on XMAC without the silver-white outer plate. See the design
+   README for reproduction and the distinction between standalone export and compiled resources.
 2. **Focus**: the custom selected-tile stroke was stacked with the system focus ring. The extra
    stroke is removed. Launcher tiles remain native buttons and retain keyboard focus accessibility;
    launching clears SwiftUI focus instead of retaining a persistent selection. Clicking a website,
@@ -33,7 +36,8 @@ account emails, Profile directories, JSON/plist keys, UUIDs and raw preference v
 Persisted device warnings remain in their original form and are translated only for display.
 
 scripts/validate_localizations.py checks key parity, placeholders and protocol-key isolation.
-scripts/validate_app_icon.py checks all ten required macOS icon slots and alpha channels. Both
+scripts/validate_app_icon.py checks all ten standalone ICNS slots and alpha channels, modern source,
+and the built modern stack, legacy multi-size representations and bundle references. Both
 validators run in the regular CI and universal smoke workflow. Localization tests cover system
 matching, explicit overrides, persistence/removal, bundled resources, formatted warnings and stable
 portable identities. The Chromium launch payload remains URL + CrProfile in every language.

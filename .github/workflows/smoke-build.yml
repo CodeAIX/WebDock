@@ -69,6 +69,7 @@ jobs:
           set -euo pipefail
           plutil -lint "$APP_PATH/Contents/Info.plist"
           python3 scripts/validate_document_types.py "$APP_PATH/Contents/Info.plist"
+          python3 scripts/validate_app_icon.py --app "$APP_PATH"
           test "$(plutil -extract LSMinimumSystemVersion raw "$APP_PATH/Contents/Info.plist")" = "13.0"
           ARCHS_OUTPUT="$(lipo -archs "$APP_PATH/Contents/MacOS/WebDock")"
           echo "Architectures: $ARCHS_OUTPUT"

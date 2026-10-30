@@ -1,0 +1,40 @@
+{
+  "fill": {
+    "solid": "srgb:0.05,0.25,0.95,1.0"
+  },
+  "groups": [
+    {
+      "name": "User artwork",
+      "lighting": "individual",
+      "specular": false,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "layers": [
+        {
+          "name": "Globe and Dock",
+          "image-name": "WebDock.png",
+          "glass": false,
+          "fill": "automatic",
+          "position": {
+            "scale": 1.3,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

@@ -207,8 +207,11 @@ confirmation with Cancel. The diagnostic app was closed after validation.
 
 ## 0.4.1 XMAC feedback regression
 
-- AppIcon: verify Dock, Finder and native About panel; packaged AppIcon.icns and Assets.car exist.
-  Source validator checks ten macOS PNG slots including 1024px and preserves alpha.
+- App icon: verify Dock, Finder and native About panel against the uploaded globe-and-Dock design;
+  no large silver-white outer backing. Packaged WebDock.icns and Assets.car exist. Source validator
+  checks all ten standalone ICNS representations (16–1024px) with alpha; built-app checks require
+  the modern icon stack, legacy multi-size images and matching icon names. Build 6's native About
+  panel was checked on XMAC without the white backing; Intel Ventura still needs visual acceptance.
 - Mouse click launch → reopen Launcher: no retained selection frame. ⌘F → Return → arrows still
   navigate, with a single native focus indicator. Recheck on Ventura.
 - Fresh language preference: Chinese macOS starts in Chinese; English starts in English; unsupported
