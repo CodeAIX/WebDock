@@ -4,7 +4,7 @@
 
 **One Dock icon for your websites, browsers and accounts.**
 
-**English** · [简体中文](README.md) · [Download 1.0.0](https://github.com/CodeAIX/WebDock/releases/latest)
+**English** · [简体中文](README.md) · [Download 1.1.0](https://github.com/CodeAIX/WebDock/releases/latest)
 
 WebDock is a native macOS website launcher. Search, organize and open websites from Launcher, choose a browser and a supported browser account for each site, and carry the same launch rules between Macs through backup or synchronization.
 
@@ -16,8 +16,8 @@ Download from [GitHub Releases](https://github.com/CodeAIX/WebDock/releases/late
 
 | File | Purpose |
 | --- | --- |
-| `WebDock-1.0.0-macos-universal.dmg` | Open and drag WebDock to Applications |
-| `WebDock-1.0.0-macos-universal.zip` | Extract and move WebDock.app to Applications |
+| `WebDock-1.1.0-macos-universal.dmg` | Open and drag WebDock to Applications |
+| `WebDock-1.1.0-macos-universal.zip` | Extract and move WebDock.app to Applications |
 | `WebDock.icns` | Standalone application icon |
 | `SHA256SUMS.txt` | SHA-256 checksums for the downloads |
 
@@ -90,7 +90,7 @@ Both methods exchange `WebDockSync.json`. Website rules, groups, ordering and we
 - Simplified Chinese and English, following the system by default or manually selected in General Settings.
 - App content updates immediately; restart for macOS menus and system dialogs to fully adopt the selected language.
 - System, light and dark appearance; configurable grid density, subtitles, sidebar and badges.
-- Globe, colorful orbit and Dock artwork as the default app icon.
+- Globe and colorful orbital ribbon artwork as the default app icon.
 - Choose a local ICNS in Appearance to customize the running Dock / ⌘Tab icon, or restore the default. Finder keeps the installed application’s default icon.
 
 ## Privacy and data

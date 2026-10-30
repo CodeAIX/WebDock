@@ -1,6 +1,6 @@
 # Application icon assets
 
-`WebDock-AppIcon-master.png` is the transparent globe, orbital ribbon and Dock artwork.
+`WebDock-AppIcon-master.png` is the transparent globe and colorful orbital ribbon artwork.
 `WebDock.icns` contains ten standard macOS representations from 16 to 1024 pixels, with alpha.
 
 Regenerate the standalone ICNS and the 1024-pixel app artwork with:

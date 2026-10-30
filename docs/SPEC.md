@@ -56,7 +56,7 @@ Simplified Chinese and English; follow system or choose manually. App content ch
 restart updates native menus/dialogs. System/light/dark themes, density, subtitle and badge options
 are local preferences. Settings rows respond across their full padded hit target.
 
-The bundled icon uses globe/orbit/Dock artwork, modern compiled resources and earlier-system
+The bundled icon uses globe/orbital-ribbon artwork, modern compiled resources and earlier-system
 representations. A local ICNS override changes the running Dock/app-switcher icon, persists after
 restart and supports reset. Finder uses the installed default. Signed bundle resources and Finder
 metadata are not modified. Input ICNS must decode correctly, have a valid header/length and be at

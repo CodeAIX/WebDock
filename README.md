@@ -4,7 +4,7 @@
 
 **一个 Dock 图标，集中管理常用网站、浏览器和账号。**
 
-[English](README.en.md) · **简体中文** · [下载 1.0.0](https://github.com/CodeAIX/WebDock/releases/latest)
+[English](README.en.md) · **简体中文** · [下载 1.1.0](https://github.com/CodeAIX/WebDock/releases/latest)
 
 WebDock 是原生 macOS 网站启动器。在 Launcher 中搜索、分组和打开网站，为每个网站指定浏览器及受支持的浏览器账号，并通过备份或同步在多台 Mac 间使用同一份启动规则。
 
@@ -16,8 +16,8 @@ WebDock 是原生 macOS 网站启动器。在 Launcher 中搜索、分组和打�
 
 | 文件 | 用途 |
 | --- | --- |
-| `WebDock-1.0.0-macos-universal.dmg` | 打开后将 WebDock 拖入 Applications |
-| `WebDock-1.0.0-macos-universal.zip` | 解压后将 WebDock.app 移入 Applications |
+| `WebDock-1.1.0-macos-universal.dmg` | 打开后将 WebDock 拖入 Applications |
+| `WebDock-1.1.0-macos-universal.zip` | 解压后将 WebDock.app 移入 Applications |
 | `WebDock.icns` | 独立应用图标 |
 | `SHA256SUMS.txt` | 下载文件的 SHA-256 校验值 |
 
@@ -90,7 +90,7 @@ macOS 可能要求授权读取浏览器配置元数据。在「设置 → 浏览
 - 简体中文和 English，默认跟随系统，也可在通用设置中手动选择。
 - 界面语言即时更新；重新启动后，macOS 菜单和系统对话框完整使用所选语言。
 - 跟随系统、浅色和深色外观；调整网格密度、副标题、侧栏及标识。
-- 使用地球、彩色轨道与 Dock 默认图标。
+- 使用地球与彩色环带默认图标。
 - 外观设置可选择本机 ICNS，自定义运行中的 Dock／⌘Tab 图标，并支持恢复默认。Finder 显示安装包提供的默认图标。
 
 ## 隐私与数据
