@@ -103,7 +103,7 @@ final class WebDockDataStore: ObservableObject {
         }
         let payload = snapshot.iconAssets ?? [:]
         guard payload.count <= 512, payload.values.reduce(0, { $0 + $1.count }) <= 32 * 1024 * 1024 else {
-            throw IconError.invalidAsset
+            throw IconError.payloadTooLarge
         }
         let store = try IconAssetStore(rootURL: rootURL)
         let references = Set(snapshot.shortcuts.compactMap(\.iconAssetID))

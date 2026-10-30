@@ -39,7 +39,8 @@ final class BackupService {
 
     init(
         dataStore: WebDockDataStore,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        automaticBackupsEnabled: Bool = true
     ) throws {
         self.dataStore = dataStore
         self.fileManager = fileManager
@@ -54,6 +55,7 @@ final class BackupService {
 
         try fileManager.createDirectory(at: backupsURL, withIntermediateDirectories: true)
 
+        guard automaticBackupsEnabled else { return }
         canonicalChangeObserver = NotificationCenter.default.addObserver(
             forName: .webDockCanonicalDataDidChange,
             object: nil,
@@ -158,7 +160,7 @@ final class BackupService {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd_HHmmss"
         let safePrefix = prefix.replacingOccurrences(of: "/", with: "-")
-        let filename = "\(safePrefix)-\(formatter.string(from: date)).webdockbackup"
+        let filename = "\(safePrefix)-\(formatter.string(from: date))-\(UUID().uuidString.prefix(8)).webdockbackup"
         let url = backupsURL.appendingPathComponent(filename, isDirectory: false)
         try write(envelope, to: url)
         return url

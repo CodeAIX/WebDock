@@ -52,6 +52,8 @@ struct WebsiteIconView: View {
                     .help(resolution.warningMessage ?? "Launch fallback")
             }
         }
+        .help(service.failed.contains(shortcut.id) ? "Website icon unavailable. Right-click to retry." : browserName)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Website icon, \(browserName)")
         .task(id: shortcut.normalizedURLString + (shortcut.iconAssetID ?? "")) {
             await service.loadIfNeeded(shortcut)

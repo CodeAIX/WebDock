@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 final class AppEnvironment {
+    let libraryNavigation = LibraryNavigation()
+    let isValidation: Bool
     let runtimeStorage: RuntimeStorage
     let dataStore: WebDockDataStore
     let backupService: BackupService
@@ -14,10 +16,11 @@ final class AppEnvironment {
     let deviceBindingResolver: DeviceBindingResolver
     let syncCoordinator: SyncCoordinator
 
-    init(rootURL: URL? = nil) throws {
+    init(rootURL: URL? = nil, isValidation: Bool = false) throws {
+        self.isValidation = isValidation
         runtimeStorage = try RuntimeStorage(rootURL: rootURL)
         dataStore = try WebDockDataStore(rootURL: runtimeStorage.rootURL)
-        backupService = try BackupService(dataStore: dataStore)
+        backupService = try BackupService(dataStore: dataStore, automaticBackupsEnabled: !isValidation)
         iconService = try ShortcutIconService(dataStore: dataStore, backupService: backupService)
         browserCatalog = BrowserCatalog()
         shortcutLauncher = ShortcutLauncher()
@@ -29,7 +32,8 @@ final class AppEnvironment {
         )
         syncCoordinator = SyncCoordinator(
             dataStore: dataStore,
-            backupService: backupService
+            backupService: backupService,
+            enabled: !isValidation
         )
     }
 }
@@ -39,4 +43,9 @@ final class AppEnvironmentRegistry: ObservableObject {
     static let shared = AppEnvironmentRegistry()
     @Published var environment: AppEnvironment?
     private init() {}
+}
+
+@MainActor
+final class LibraryNavigation: ObservableObject {
+    @Published var shortcutID: UUID?
 }

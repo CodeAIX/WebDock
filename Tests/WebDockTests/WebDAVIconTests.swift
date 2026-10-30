@@ -63,3 +63,26 @@ final class WebDAVIconTests: XCTestCase {
         catch { XCTAssertEqual(error as? SyncError, .conflict) }
     }
 }
+
+extension WebDAVIconTests {
+    @MainActor
+    func testInitialWebDAVCreateUsesIfNoneMatch() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [WebDAVStub.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel(); WebDAVStub.response = nil }
+        var didPut = false
+        WebDAVStub.response = { request in
+            if request.httpMethod == "GET" { return (404, [:], Data()) }
+            XCTAssertEqual(request.value(forHTTPHeaderField: "If-None-Match"), "*")
+            XCTAssertNil(request.value(forHTTPHeaderField: "If-Match"))
+            didPut = true
+            return (201, ["ETag": "\"new\""], Data())
+        }
+        let provider = WebDAVProvider(baseURL: URL(string: "https://sync.example/webdock/")!, username: "", password: nil, session: session)
+        let result = try await provider.load()
+        XCTAssertNil(result)
+        try await provider.save(.empty)
+        XCTAssertTrue(didPut)
+    }
+}

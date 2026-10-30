@@ -31,6 +31,11 @@ final class PortableIconTests: XCTestCase {
         XCTAssertNotNil(try IconAssetStore(rootURL: destination.rootURL).image(for: id))
         XCTAssertTrue(destination.deviceBindings.isEmpty)
         XCTAssertFalse(try String(contentsOf: destination.canonicalURL).contains("iconAssets"))
+        let other = WebShortcut(displayName: "Keep Local", normalizedURLString: "https://local.example/")
+        try destination.insertShortcut(other)
+        try targetBackup.restore(from: url, mode: .merge)
+        XCTAssertEqual(destination.activeShortcuts.count, 2)
+        XCTAssertNotNil(try IconAssetStore(rootURL: destination.rootURL).image(for: id))
 
         let folder = SyncedFolderProvider(folderURL: root.appendingPathComponent("Sync"))
         try await folder.save(source.snapshotWithAssets())

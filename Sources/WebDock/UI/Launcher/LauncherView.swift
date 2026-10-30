@@ -24,18 +24,30 @@ struct ShortcutTileView: View {
     let shortcut: WebShortcut
     let resolution: ShortcutResolution
     let iconService: ShortcutIconService
+    var selected = false
     let action: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("WebDock.gridDensity") private var densityRaw = GridDensity.standard.rawValue
+    @AppStorage("WebDock.subtitleMode") private var subtitleMode = "account"
+    @AppStorage("WebDock.showBrowserBadge") private var showBrowserBadge = true
+    @AppStorage("WebDock.showWarningBadge") private var showWarningBadge = true
     @State private var isHovered = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            WebsiteIconView(shortcut: shortcut, resolution: resolution, service: iconService)
+        Button(action: action) {
+          VStack(spacing: 8) {
+            WebsiteIconView(shortcut: shortcut, resolution: resolution, service: iconService,
+                            size: (GridDensity(rawValue: densityRaw) ?? .standard).iconSize,
+                            showBrowser: showBrowserBadge, showWarning: showWarningBadge)
             Text(shortcut.displayName)
                 .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Text(shortcut.displaySubtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            if subtitleMode != "hidden" {
+                Text(subtitleMode == "domain" ? URL(string: shortcut.normalizedURLString)?.host ?? "" : shortcut.displaySubtitle)
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -43,43 +55,70 @@ struct ShortcutTileView: View {
             isHovered ? Color.primary.opacity(0.06) : Color.clear,
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
         .contentShape(Rectangle())
-        .onTapGesture(perform: action)
+          }
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered && !reduceMotion ? 1.025 : 1)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isHovered)
         .onHover { isHovered = $0 }
         .help(resolution.warningMessage ?? shortcut.normalizedURLString)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(shortcut.displayName), \(URL(string: shortcut.normalizedURLString)?.host ?? shortcut.normalizedURLString)")
+        .accessibilityLabel("\(shortcut.displayName), \(resolution.summary), account \(shortcut.accountDisplayUsername ?? "default")")
+        .accessibilityHint(resolution.warningMessage ?? "Open website")
         .accessibilityAddTraits(.isButton)
     }
+}
+
+private let shortcutDragType = UTType.text
+
+private final class LauncherDragState: ObservableObject {
+    var sourceID: UUID?
+    var token: String?
+    var generation = 0
+    var requestSequence = 0
+    var lastTargetID: UUID?
 }
 
 private struct ShortcutReorderDropDelegate: DropDelegate {
     let targetID: UUID
     let canReorder: Bool
-    @Binding var draggedShortcutID: UUID?
+    let dragState: LauncherDragState
     let performMove: (UUID, UUID) -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
-        canReorder && draggedShortcutID != nil && draggedShortcutID != targetID
+        canReorder && info.hasItemsConforming(to: [shortcutDragType])
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard validateDrop(info: info), let sourceID = dragState.sourceID,
+              let token = dragState.token, sourceID != targetID, dragState.lastTargetID != targetID,
+              let provider = info.itemProviders(for: [shortcutDragType]).first,
+              provider.canLoadObject(ofClass: NSString.self) else { return }
+        dragState.lastTargetID = targetID
+        dragState.requestSequence += 1
+        let sequence = dragState.requestSequence
+        let generation = dragState.generation
+        provider.loadObject(ofClass: NSString.self) { value, _ in
+            guard let text = value as? String else { return }
+            DispatchQueue.main.async {
+                guard text == token, dragState.generation == generation,
+                      dragState.requestSequence == sequence else { return }
+                performMove(sourceID, targetID)
+            }
+        }
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        guard validateDrop(info: info) else {
-            return DropProposal(operation: .cancel)
-        }
-        return DropProposal(operation: .move)
+        dropEntered(info: info)
+        return DropProposal(operation: validateDrop(info: info) ? .copy : .cancel)
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        guard canReorder,
-              let sourceID = draggedShortcutID,
-              sourceID != targetID else {
-            draggedShortcutID = nil
-            return false
-        }
-
-        performMove(sourceID, targetID)
-        draggedShortcutID = nil
+        guard validateDrop(info: info) else { return false }
+        dragState.sourceID = nil
+        dragState.token = nil
+        dragState.lastTargetID = nil
         return true
     }
 }
@@ -93,10 +132,14 @@ struct LauncherView: View {
     @AppStorage("WebDock.browserAccessOnboardingShown") private var onboardingShown = false
     @AppStorage("WebDock.launcherSidebarVisible") private var sidebarVisible = true
     @State private var selectedGroupID: UUID?
+    @AppStorage("WebDock.gridDensity") private var densityRaw = GridDensity.standard.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var focusedShortcutID: UUID?
+    @State private var pendingDelete: WebShortcut?
     @FocusState private var searchFocused: Bool
     @State private var searchText = ""
     @State private var errorMessage: String?
-    @State private var draggedShortcutID: UUID?
+    @StateObject private var dragState = LauncherDragState()
     @State private var showNewShortcutSheet = false
     @State private var showBrowserAccessOnboarding = false
 
@@ -138,7 +181,10 @@ struct LauncherView: View {
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
                     .accessibilityIdentifier("launcher.search")
-                    .onSubmit { if filtered.count == 1, let shortcut = filtered.first { launch(shortcut) } }
+                    .onSubmit {
+                        if filtered.count == 1, let shortcut = filtered.first { launch(shortcut) }
+                        else { searchFocused = false; focusedShortcutID = filtered.first?.id }
+                    }
             }
             .padding(10)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
@@ -227,6 +273,12 @@ struct LauncherView: View {
                 }
             }
         }
+        .background(LauncherReturnKey {
+            guard !searchFocused, let focusedShortcutID,
+                  let shortcut = filtered.first(where: { $0.id == focusedShortcutID }) else { return false }
+            launch(shortcut)
+            return true
+        })
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .onChange(of: dataStore.activeGroups) { groups in
             if let selectedGroupID, !groups.contains(where: { $0.id == selectedGroupID }) {
@@ -241,11 +293,27 @@ struct LauncherView: View {
         }
         .onAppear {
             if !onboardingShown {
-                showBrowserAccessOnboarding = true
+                showBrowserAccessOnboarding = !environment.isValidation
             }
         }
-        .onExitCommand {
-            NSApp.keyWindow?.orderOut(nil)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            dragState.generation += 1
+            dragState.sourceID = nil
+            dragState.token = nil
+            dragState.lastTargetID = nil
+        }
+        .onDeleteCommand {
+            if let focusedShortcutID { pendingDelete = filtered.first { $0.id == focusedShortcutID } }
+        }
+        .onExitCommand { NSApp.keyWindow?.orderOut(nil) }
+        .confirmationDialog("Delete “\(pendingDelete?.displayName ?? "Shortcut")”?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("Delete Shortcut", role: .destructive) {
+                if let shortcut = pendingDelete { perform { try environment.shortcutStore.delete(shortcut) } }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
         }
         .alert(
             "WebDock",
@@ -270,42 +338,79 @@ struct LauncherView: View {
                     : "No shortcuts match your search."
             )
         } else {
-            ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 92, maximum: 110), spacing: 12)],
-                    spacing: 16
-                ) {
-                    ForEach(filtered, id: \.id) { shortcut in
-                        let resolution = environment.deviceBindingResolver.resolution(for: shortcut)
-                        ShortcutTileView(
-                            shortcut: shortcut,
-                            resolution: resolution,
-                            iconService: environment.iconService
-                        ) {
-                            launch(shortcut)
-                        }
-                        .opacity(draggedShortcutID == shortcut.id ? 0.55 : 1)
-                        .onDrag {
-                            guard canReorder else {
-                                return NSItemProvider()
+            GeometryReader { geometry in
+                let density = GridDensity(rawValue: densityRaw) ?? .standard
+                let columnCount = max(1, Int((geometry.size.width + 12) / (density.minimumWidth + 12)))
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount), spacing: 16) {
+                            ForEach(filtered, id: \.id) { shortcut in
+                                ShortcutTileView(shortcut: shortcut,
+                                    resolution: environment.deviceBindingResolver.resolution(for: shortcut),
+                                    iconService: environment.iconService, selected: focusedShortcutID == shortcut.id
+                                ) { launch(shortcut) }
+                                .id(shortcut.id)
+                                .focusable()
+                                .focused($focusedShortcutID, equals: shortcut.id)
+                                .onMoveCommand { direction in moveFocus(from: shortcut.id, direction: direction, columns: columnCount) }
+                                .contextMenu { shortcutMenu(shortcut) }
+                                .onDrag {
+                                    guard canReorder else { return NSItemProvider() }
+                                    dragState.generation += 1
+                                    dragState.requestSequence = 0
+                                    dragState.sourceID = shortcut.id
+                                    dragState.lastTargetID = nil
+                                    let token = "WebDock:" + shortcut.id.uuidString + ":" + UUID().uuidString
+                                    dragState.token = token
+                                    return NSItemProvider(object: token as NSString)
+                                }
+                                .onDrop(of: [shortcutDragType], delegate: ShortcutReorderDropDelegate(
+                                    targetID: shortcut.id, canReorder: canReorder,
+                                    dragState: dragState, performMove: moveShortcut))
                             }
-                            draggedShortcutID = shortcut.id
-                            return NSItemProvider(object: shortcut.id.uuidString as NSString)
                         }
-                        .onDrop(
-                            of: [UTType.plainText],
-                            delegate: ShortcutReorderDropDelegate(
-                                targetID: shortcut.id,
-                                canReorder: canReorder,
-                                draggedShortcutID: $draggedShortcutID,
-                                performMove: moveShortcut
-                            )
-                        )
+                        .padding(4)
+                    }
+                    .onChange(of: focusedShortcutID) { id in
+                        if let id { proxy.scrollTo(id) }
                     }
                 }
-                .padding(.vertical, 2)
             }
         }
+    }
+
+    private func moveFocus(from id: UUID, direction: MoveCommandDirection, columns: Int) {
+        guard let index = filtered.firstIndex(where: { $0.id == id }) else { return }
+        let offset: Int
+        switch direction { case .left: offset = -1; case .right: offset = 1; case .up: offset = -columns; case .down: offset = columns; @unknown default: return }
+        let next = min(max(0, index + offset), filtered.count - 1)
+        focusedShortcutID = filtered[next].id
+    }
+
+    @ViewBuilder private func shortcutMenu(_ shortcut: WebShortcut) -> some View {
+        Button("Open") { launch(shortcut) }
+        Button("Edit") {
+            environment.libraryNavigation.shortcutID = shortcut.id
+            onOpenManager()
+        }
+        Button("Duplicate") { perform { _ = try environment.shortcutStore.duplicate(shortcut) } }
+        Divider()
+        Button("Change Icon…") { perform { try environment.iconService.chooseIcon(for: shortcut) } }
+        Button("Reset Icon") { perform { try environment.iconService.reset(shortcut) } }
+        Button("Retry Automatic Icon") { Task { await environment.iconService.loadIfNeeded(shortcut, force: true) } }
+            .disabled(shortcut.iconMode == "custom")
+        Menu("Move to Group") {
+            Button("None") { perform { try environment.shortcutStore.setGroup(nil, for: shortcut) } }
+            ForEach(dataStore.activeGroups) { group in
+                Button(group.name) { perform { try environment.shortcutStore.setGroup(group.id, for: shortcut) } }
+            }
+        }
+        Divider()
+        Button("Delete…", role: .destructive) { pendingDelete = shortcut }
+    }
+
+    private func perform(_ action: () throws -> Void) {
+        do { try action() } catch { errorMessage = error.localizedDescription }
     }
 
     private func launch(_ shortcut: WebShortcut) {
@@ -323,10 +428,9 @@ struct LauncherView: View {
 
     private func moveShortcut(_ sourceID: UUID, onto targetID: UUID) {
         do {
-            try environment.shortcutStore.moveForDrop(
-                shortcutID: sourceID,
-                onto: targetID
-            )
+            try withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                try environment.shortcutStore.moveForDrop(shortcutID: sourceID, onto: targetID)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
