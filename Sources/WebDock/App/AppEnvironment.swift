@@ -9,6 +9,8 @@ final class AppEnvironment {
     let dataStore: WebDockDataStore
     let backupService: BackupService
     let iconService: ShortcutIconService
+    let appIconService: AppIconService
+    let globalHotKey: GlobalHotKeyService
     let shortcutLauncher: ShortcutLauncher
     let shortcutStore: ShortcutStore
     let shortcutCreationService: ShortcutCreationService
@@ -18,7 +20,9 @@ final class AppEnvironment {
 
     init(rootURL: URL? = nil, isValidation: Bool = false) throws {
         self.isValidation = isValidation
+        globalHotKey = GlobalHotKeyService(enabledByDefault: !isValidation)
         runtimeStorage = try RuntimeStorage(rootURL: rootURL)
+        appIconService = AppIconService(rootURL: runtimeStorage.rootURL)
         dataStore = try WebDockDataStore(rootURL: runtimeStorage.rootURL)
         backupService = try BackupService(dataStore: dataStore, automaticBackupsEnabled: !isValidation)
         iconService = try ShortcutIconService(dataStore: dataStore, backupService: backupService)

@@ -4,7 +4,7 @@
   },
   "groups": [
     {
-      "name": "User artwork",
+      "name": "WebDock",
       "lighting": "individual",
       "specular": false,
       "shadow": {
@@ -17,7 +17,7 @@
       },
       "layers": [
         {
-          "name": "Globe and Dock",
+          "name": "Globe, orbit and Dock",
           "image-name": "WebDock.png",
           "glass": false,
           "fill": "automatic",

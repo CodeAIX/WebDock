@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !isTestHost else { return }
         do {
             try bootstrapIfNeeded()
+            environment?.appIconService.applySavedIcon()
+            environment?.globalHotKey.start { [weak self] in self?.openLauncherFromGlobalHotKey() }
             if environment?.isValidation != true {
                 try environment?.backupService.performAutomaticBackupIfNeeded()
                 environment?.syncCoordinator.start()
@@ -37,6 +39,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        servicePendingLauncherShowOnNextRunLoop()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        environment?.globalHotKey.stop()
+    }
+
+    private func openLauncherFromGlobalHotKey() {
+        // Keep an existing draft/file picker in front rather than covering it with a second flow.
+        if let window = NSApp.modalWindow ?? NSApp.windows.first(where: { $0.attachedSheet != nil }) {
+            launcherVisibilityState.cancelPendingShow()
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            window.attachedSheet?.makeKeyAndOrderFront(nil)
+            return
+        }
+        launcherVisibilityState.requestShow()
+        NSApp.activate(ignoringOtherApps: true)
         servicePendingLauncherShowOnNextRunLoop()
     }
 
