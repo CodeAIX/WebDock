@@ -105,8 +105,17 @@ final class BrowserProfileDiscoveryTests: XCTestCase {
             try? manager.removeItem(at: home)
         }
         try manager.setAttributes([.posixPermissions: 0], ofItemAtPath: dataRoot.path)
+        XCTAssertFalse(manager.fileExists(atPath: dataRoot.appendingPathComponent("Local State").path))
         let browser = BrowserOption(bundleIdentifier: "com.google.Chrome", displayName: "Chrome",
             chromiumUserDataRelativePath: "Google/Chrome", profileRoutingSupport: .verifiedChromiumWebloc)
-        XCTAssertThrowsError(try BrowserProfileDiscovery(homeDirectory: home).discoverProfiles(for: browser))
+        XCTAssertThrowsError(try BrowserProfileDiscovery(homeDirectory: home).discoverProfiles(for: browser)) { error in
+            let error = error as NSError
+            let errors = [error, error.userInfo[NSUnderlyingErrorKey] as? NSError].compactMap { $0 }
+            XCTAssertTrue(errors.contains {
+                ($0.domain == NSCocoaErrorDomain && $0.code == NSFileReadNoPermissionError) ||
+                ($0.domain == NSPOSIXErrorDomain && $0.code == Int(EACCES)) ||
+                ($0.domain == NSPOSIXErrorDomain && $0.code == Int(EPERM))
+            }, "Expected a real permission denial, not a metadata parsing error")
+        }
     }
 }
