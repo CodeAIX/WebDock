@@ -113,3 +113,28 @@ Release smoke build additionally must:
 5. edit both sides to exercise ETag conflict retry;
 6. wrong credentials/network failure surfaces an error without corrupting local data;
 7. Keychain holds password; JSON/preferences do not.
+
+## UI-1 Launcher acceptance (pending real-device validation)
+
+Run on current Apple Silicon macOS and Intel macOS 13.6.9, in light and dark appearance:
+
+1. Launch with a fresh sidebar preference: sidebar is visible. Toggle it repeatedly;
+   search, +, Library and Settings keep the same positions. Grid expands into available space.
+2. Hide sidebar, restart, and verify it stays hidden; show it and restart again.
+3. All Shortcuts shows the library; existing group rows filter correctly. Search matches
+   name, URL, email, browser and group within the selected scope. Removing a selected group
+   through sync returns the view to All Shortcuts.
+4. With no shortcuts/results, the empty state fits beside the sidebar.
+5. ⌘F focuses search, ⌘N opens creation, Return launches only when one result remains.
+   Esc hides Launcher. ⌘1 opens Launcher and ⌘2 opens Library from other app windows.
+6. Click Settings and use ⌘, separately: Launcher hides, Settings opens; repeat with
+   Settings already open. On Ventura verify the compatibility action opens Settings.
+7. Open Library: Launcher hides. Repeated Dock reopen and deactivate retain prior behavior,
+   without flashing or a queued Launcher appearing above Library/Settings.
+8. Reorder in All Shortcuts with search cleared; restart and verify persistence. Search/group
+   filters disable reorder to avoid changing global order from a partial list.
+9. New Shortcut and Browser Account Access sheets remain usable with keyboard and pointer.
+10. Confirm critical buttons remain visible and accessible on both OS versions; verify panel
+    placement near each Dock edge and on smaller/multiple displays (default size 780 × 520).
+
+Build/test and universal package checks do not establish these visual or browser-routing results.
