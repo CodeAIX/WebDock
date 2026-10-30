@@ -103,13 +103,15 @@ final class BackupService {
             createdAt: Date(),
             appVersion: appVersion,
             kind: .portable,
-            canonical: dataStore.canonicalSnapshot(),
+            canonical: try dataStore.snapshotWithAssets(),
             deviceBindings: nil
         )
         try write(envelope, to: url)
     }
 
     func restore(from url: URL, mode: BackupRestoreMode) throws {
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size <= 48 * 1024 * 1024 else { throw BackupError.unsupportedBackup }
         let data = try Data(contentsOf: url)
         let envelope = try decoder.decode(WebDockBackupEnvelope.self, from: data)
         guard envelope.formatIdentifier == WebDockBackupEnvelope.formatIdentifier,
@@ -117,6 +119,7 @@ final class BackupService {
             throw BackupError.unsupportedBackup
         }
 
+        try dataStore.validateAssets(in: envelope.canonical)
         _ = try createPreRestoreSnapshot()
 
         switch mode {
@@ -131,7 +134,7 @@ final class BackupService {
             )
         case .merge:
             let merged = SyncMergeEngine.merge(
-                local: dataStore.canonicalSnapshot(),
+                local: try dataStore.snapshotWithAssets(requireAll: false),
                 remote: envelope.canonical
             )
             try dataStore.applyCanonicalSnapshot(merged, notify: true)
@@ -147,7 +150,7 @@ final class BackupService {
             createdAt: date,
             appVersion: appVersion,
             kind: .localSnapshot,
-            canonical: dataStore.canonicalSnapshot(),
+            canonical: try dataStore.snapshotWithAssets(requireAll: false),
             deviceBindings: dataStore.deviceBindings
         )
 

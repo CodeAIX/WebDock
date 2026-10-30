@@ -43,10 +43,14 @@ struct SyncMergeEngine {
             }
         }
 
+        let references = Set(shortcuts.values.filter { $0.deletedAt == nil }.compactMap(\.iconAssetID))
+        let allAssets = (local.iconAssets ?? [:]).merging(remote.iconAssets ?? [:]) { local, _ in local }
+        let assets = allAssets.filter { references.contains($0.key) }
         return CanonicalSnapshot(
             shortcuts: shortcuts.values.sorted { $0.id.uuidString < $1.id.uuidString },
             groups: groups.values.sorted { $0.id.uuidString < $1.id.uuidString },
-            generatedAt: Date()
+            generatedAt: Date(),
+            iconAssets: assets.isEmpty ? nil : assets
         )
     }
 }
@@ -80,6 +84,8 @@ final class SyncedFolderProvider: CanonicalSyncProvider {
 
     func load() async throws -> CanonicalSnapshot? {
         guard fileManager.fileExists(atPath: snapshotURL.path) else { return nil }
+        let size = try snapshotURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size <= 48 * 1024 * 1024 else { throw IconError.invalidAsset }
         let data = try Data(contentsOf: snapshotURL)
         let snapshot = try decoder.decode(CanonicalSnapshot.self, from: data)
         guard snapshot.schemaVersion <= CanonicalSnapshot.currentSchemaVersion else {
@@ -141,6 +147,7 @@ final class WebDAVProvider: CanonicalSyncProvider {
         guard (200...299).contains(http.statusCode) else {
             throw SyncError.httpStatus(http.statusCode)
         }
+        guard data.count <= 48 * 1024 * 1024 else { throw IconError.invalidAsset }
         etag = http.value(forHTTPHeaderField: "ETag")
         let snapshot = try decoder.decode(CanonicalSnapshot.self, from: data)
         guard snapshot.schemaVersion <= CanonicalSnapshot.currentSchemaVersion else {
@@ -219,6 +226,7 @@ final class SyncCoordinator {
     private var observers: [NSObjectProtocol] = []
     private var scheduledTask: Task<Void, Never>?
     private var isSyncing = false
+    private var needsAnotherSync = false
 
     init(dataStore: WebDockDataStore, backupService: BackupService) {
         self.dataStore = dataStore
@@ -276,7 +284,7 @@ final class SyncCoordinator {
     }
 
     func syncNow() async {
-        guard !isSyncing else { return }
+        guard !isSyncing else { needsAnotherSync = true; return }
         guard SyncPreferences.providerKind != .off else {
             SyncStatusCenter.shared.state = .idle
             return
@@ -284,7 +292,10 @@ final class SyncCoordinator {
 
         isSyncing = true
         SyncStatusCenter.shared.state = .syncing
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            if needsAnotherSync { needsAnotherSync = false; scheduleSync() }
+        }
 
         do {
             let provider = try makeProvider()
@@ -327,17 +338,19 @@ final class SyncCoordinator {
         }
     }
 
-    private func synchronize(with provider: any CanonicalSyncProvider) async throws {
-        let local = dataStore.canonicalSnapshot()
+    func synchronize(with provider: any CanonicalSyncProvider) async throws {
         let remote = try await provider.load() ?? .empty
+        try dataStore.validateAssets(in: remote)
+        // Capture local state after the network await, so edits made during GET survive.
+        let local = try dataStore.snapshotWithAssets(requireAll: false)
         let merged = SyncMergeEngine.merge(local: local, remote: remote)
 
         if merged.shortcuts != local.shortcuts || merged.groups != local.groups {
-            _ = try? backupService.createSafetySnapshot(prefix: "Pre-Sync")
+            _ = try backupService.createSafetySnapshot(prefix: "Pre-Sync")
         }
 
         try dataStore.applyCanonicalSnapshot(merged, notify: false)
-        try await provider.save(dataStore.canonicalSnapshot())
+        try await provider.save(try dataStore.snapshotWithAssets())
     }
 }
 

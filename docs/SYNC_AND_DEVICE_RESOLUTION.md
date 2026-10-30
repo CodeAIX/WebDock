@@ -220,3 +220,24 @@ and the shortcut shows a visible missing-account warning.
 - real acceptance target includes Intel macOS 13.6.9 and a current Apple Silicon Mac
 - no SwiftData dependency
 - no macOS 14-only UI without fallback
+
+## UI-4 portable icons (additive v1 extension)
+
+Canonical shortcut iconMode/iconAssetID/iconSourceURL are optional. Canonical.json contains metadata
+only. Portable snapshots add optional `iconAssets: { SHA256: base64PNG }` to the existing JSON
+snapshot, used by Synced Folder, WebDAV, portable export and local safety snapshots. Embedding
+assets keeps each provider's single-file atomic/ETag transaction; no sidecar directory or remote
+MKCOL permission is needed. Existing v1 files without assets remain readable. All participating
+Macs should use v0.4 before editing icons: older v0.3 writers do not retain unknown fields.
+
+Only referenced active icons are exported; no local absolute path, binding or browser badge is
+portable. Assets are limited to 512 × 512 normalized PNG, 4 MiB each, 512 entries and 32 MiB total.
+Hash, image dimensions, reference IDs, duplicate UUIDs and aggregate size are validated before
+library changes. Asset installation precedes canonical atomic replacement; failed imports may
+leave unreferenced cache files but never a library pointing at partially written bytes. Missing
+legacy assets render a globe; portable export fails if an effective referenced icon is missing.
+
+Restore validates first and makes a Pre-Restore snapshot. Sync validates before merge and requires
+a successful Pre-Sync snapshot before applying changes. Local state is captured after remote GET,
+so edits made during network requests survive. Concurrent sync requests schedule another pass.
+No garbage collection deletes icons during these phases; older backup references remain recoverable.

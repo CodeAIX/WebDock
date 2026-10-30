@@ -81,6 +81,45 @@ final class WebDockDataStore: ObservableObject {
         )
     }
 
+    /// Binary assets travel in the provider-independent envelope, never in Canonical.json.
+    func snapshotWithAssets(requireAll: Bool = true) throws -> CanonicalSnapshot {
+        var snapshot = canonicalSnapshot()
+        let assets = try IconAssetStore(rootURL: rootURL)
+        var payload: [String: Data] = [:]
+        for id in Set(activeShortcuts.compactMap(\.iconAssetID)) {
+            do { payload[id] = try assets.data(for: id) }
+            catch { if requireAll { throw error } }
+        }
+        snapshot.iconAssets = payload.isEmpty ? nil : payload
+        try validateAssets(in: snapshot)
+        return snapshot
+    }
+
+    func validateAssets(in snapshot: CanonicalSnapshot) throws {
+        guard snapshot.schemaVersion <= CanonicalSnapshot.currentSchemaVersion,
+              Set(snapshot.shortcuts.map(\.id)).count == snapshot.shortcuts.count,
+              Set(snapshot.groups.map(\.id)).count == snapshot.groups.count else {
+            throw WebDockDataStoreError.invalidSnapshot
+        }
+        let payload = snapshot.iconAssets ?? [:]
+        guard payload.count <= 512, payload.values.reduce(0, { $0 + $1.count }) <= 32 * 1024 * 1024 else {
+            throw IconError.invalidAsset
+        }
+        let store = try IconAssetStore(rootURL: rootURL)
+        let references = Set(snapshot.shortcuts.compactMap(\.iconAssetID))
+        for (id, data) in payload {
+            guard references.contains(id) else { throw IconError.invalidAsset }
+            try store.validate(data, id: id)
+        }
+        for id in references where !IconAssetStore.validID(id) { throw IconError.invalidAsset }
+    }
+
+    private func installAssets(from snapshot: CanonicalSnapshot) throws {
+        try validateAssets(in: snapshot)
+        let store = try IconAssetStore(rootURL: rootURL)
+        for (id, data) in snapshot.iconAssets ?? [:] { try store.install(data, id: id) }
+    }
+
     func upsertGroup(_ group: ShortcutGroup) throws {
         var updated = groups.filter { $0.id != group.id }
         updated.append(group)
@@ -130,6 +169,7 @@ final class WebDockDataStore: ObservableObject {
         guard snapshot.schemaVersion <= CanonicalSnapshot.currentSchemaVersion else {
             throw WebDockDataStoreError.unsupportedSchema(snapshot.schemaVersion)
         }
+        try installAssets(from: snapshot)
         try replaceCanonical(
             shortcuts: snapshot.shortcuts,
             groups: snapshot.groups,
@@ -145,6 +185,7 @@ final class WebDockDataStore: ObservableObject {
         guard canonical.schemaVersion <= CanonicalSnapshot.currentSchemaVersion else {
             throw WebDockDataStoreError.unsupportedSchema(canonical.schemaVersion)
         }
+        try installAssets(from: canonical)
         try persistCanonical(canonical.shortcuts, canonical.groups)
         try persistDeviceBindings(bindings)
         shortcuts = canonical.shortcuts
@@ -219,10 +260,13 @@ final class WebDockDataStore: ObservableObject {
 
 enum WebDockDataStoreError: LocalizedError, Equatable {
     case shortcutNotFound
+    case invalidSnapshot
     case unsupportedSchema(Int)
 
     var errorDescription: String? {
         switch self {
+        case .invalidSnapshot:
+            "The library contains invalid or duplicate records."
         case .shortcutNotFound:
             "The shortcut could not be found in WebDock's local store."
         case .unsupportedSchema(let version):

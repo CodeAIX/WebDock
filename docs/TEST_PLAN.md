@@ -154,3 +154,12 @@ Automated: icon metadata parsing/priority/relative URLs, forbidden URL schemes, 
 invalid image rejection, optional legacy fields. Pending real-Mac: ChatGPT, Claude, Google, DeepSeek,
 GitHub high-resolution appearance; PNG/JPEG/ICO/ICNS picker, custom/reset/refresh, local browser
 badge reflects override/default, account subtitle, warning tooltip, offline globe, light/dark.
+
+## UI-4 icon transport
+
+Automated: portable custom icon backup/restore and folder round-trip on independent roots;
+canonical file excludes embedded blobs; hash/path/corrupt data rejected before replacement;
+WebDAV icon bytes preserved with ETag/If-Match and 412 conflict; edits during GET survive.
+Existing backup tests verify local bindings never enter portable data and Replace resets bindings.
+Pending two-device acceptance: manual icon on A arrives on B by folder and real WebDAV, works
+offline after restart, replace/merge restore preserves icons, account email re-resolves locally.
