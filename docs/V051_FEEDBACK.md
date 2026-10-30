@@ -23,9 +23,13 @@ Diagnostic copies default to disabled to avoid competing with a normal running i
 
 Automated coverage adds preference/restart and disabled state, conflict preservation, recording
 cancel/rejection rollback, stale callback suppression, corrupt preference fallback, startup retry,
-real exclusive native registration/release and global activation ordering. App-targeted UI key
-injection did record ⌃⌥J but did not exercise the system's global dispatch; true background
-activation is awaiting a physical-keyboard check and must not be claimed from registration alone.
+real exclusive native registration/release and global activation ordering. Isolated XMAC UI checks
+verified recording ⌃⌥J, a real quit/restart retaining it enabled, rejection of plain typing,
+Escape cancellation, rejection of system-reserved ⌘Space while preserving ⌃⌥J, Restore Default,
+and a second quit/restart retaining disabled state and ⌃⌥W. The diagnostic copy was reset and quit.
+The user confirmed that a physical ⌃⌥J press from another foreground application summons Launcher.
+This background-dispatch acceptance is user-reported; app-targeted synthetic key events did not
+exercise system global dispatch and are not used as evidence for that result.
 
 ## Previous feedback changes
 

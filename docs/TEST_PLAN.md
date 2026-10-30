@@ -12,6 +12,12 @@
   cancellation, stale callback rejection, startup retry, corrupt preference fallback, exclusive
   native registration/release and deferred activation event ordering. Real keyboard acceptance
   remains distinct from app-targeted synthetic key events.
+
+Build 10 XMAC acceptance: custom ⌃⌥J recording and real restart retention, invalid-key rejection,
+Escape cancel, system ⌘Space conflict preserving ⌃⌥J, Restore Default and disabled-state restart
+retention passed in an isolated diagnostic copy. The user separately confirmed physical ⌃⌥J
+summons Launcher from another foreground application. Diagnostic defaults were restored/disabled
+and the copy quit; the normal installation and library were not replaced.
 - Verify Launcher uses a bookmark line icon for Library, retaining the tooltip/action.
 - Click Settings rows on their right blank padding, icon and label; each selects the same page.
 - Appearance → Choose ICNS: valid file previews and changes the running Dock/app-switcher icon;
