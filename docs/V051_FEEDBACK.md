@@ -18,7 +18,7 @@ Finder retains the installed app icon, as explained in Settings. Testing NSWorks
 isolated diagnostic app showed it attaches FinderInfo metadata and causes strict codesign validation
 to fail. That approach is not in the final implementation. It must not be restored silently as a
 way to promise Finder customization while claiming the installed bundle signature remains intact.
-The user was asked asynchronously whether runtime-only scope meets their preference.
+The user explicitly confirmed runtime-only Dock/app-switcher customization with restart persistence.
 
 4. Browser profile discovery now attempts the Local State read directly. Only a true no-such-file
    result becomes an empty list; permission failures propagate to the existing access-required UI.
@@ -49,6 +49,12 @@ Primary references:
 
 50 tests cover existing behavior, ICNS persistence/restart/reset, invalid-file and storage-failure
 preservation, exclusion from portable backups, missing metadata and real temporary directory read
-denial. Settings hit testing and actual runtime icon selection/reset/restart require isolated XMAC
-UI checks, plus native Intel acceptance before this candidate is promoted. The previous Intel pass
-applies to 0.5.0; it is not copied onto this new feature. No new release is published by these changes.
+denial. Isolated XMAC checks established bookmark rendering, blank Settings-row clicks, actual
+ICNS selection through the native picker, preview/reset state, persistence across a real quit and
+restart, and reset surviving a second restart. The signed bundle's entire Contents tree, root
+extended-attribute names and designated requirement were compared before selection, after selection,
+after restart and after reset/restart; all remained identical and strict codesign verification passed.
+The diagnostic app was reset to default and closed. The normal installed app/library was untouched.
+
+Native Intel acceptance for these new features remains open. The previous Intel pass applies to
+0.5.0; it is not copied onto this candidate. No new release is published by these changes.

@@ -14,6 +14,11 @@
   error/access-required status instead of zero-account success. Never reset TCC during automation.
 - Recheck native Intel UI for this new candidate; the user's 0.5.0 pass is recorded separately.
 
+XMAC follow-up completed after the user confirmed runtime-only scope and unlocked the Mac: native
+ICNS picker selection, retained preview/reset state after a real quit/restart, restore default and
+a second restart retaining default. Strict signature, all Contents hashes, root xattr names and
+designated requirement stayed unchanged at every checkpoint. Diagnostic app reset and closed.
+
 ## Automated tests
 
 ### Canonical model / creation
