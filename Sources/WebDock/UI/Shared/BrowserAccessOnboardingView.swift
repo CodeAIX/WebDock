@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BrowserAccessOnboardingView: View {
+    @ObservedObject private var language = AppLanguage.shared
     @ObservedObject var browserCatalog: BrowserCatalog
     @Environment(\.dismiss) private var dismiss
     @AppStorage("WebDock.browserAccessOnboardingShown") private var onboardingShown = false
@@ -11,14 +12,14 @@ struct BrowserAccessOnboardingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Browser Account Access")
+            Text(L10n.tr("Browser Account Access"))
                 .font(.title2.weight(.semibold))
 
-            Text("WebDock reads only browser profile metadata so it can show your account names and match an account email to the correct local browser profile. It does not read browsing history, cookies, passwords, or saved credentials.")
+            Text(L10n.tr("WebDock reads only browser profile metadata so it can show your account names and match an account email to the correct local browser profile. It does not read browsing history, cookies, passwords, or saved credentials."))
                 .foregroundStyle(.secondary)
 
             if browsers.isEmpty {
-                Text("No supported Chromium-family browsers are currently installed.")
+                Text(L10n.tr("No supported Chromium-family browsers are currently installed."))
                     .foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 10) {
@@ -31,7 +32,7 @@ struct BrowserAccessOnboardingView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Button("Authorize") {
+                            Button(L10n.tr("Authorize")) {
                                 _ = browserCatalog.requestProfileAccess(for: browser)
                             }
                         }
@@ -39,20 +40,20 @@ struct BrowserAccessOnboardingView: View {
                 }
             }
 
-            Text("macOS controls the actual Files & Folders permission. WebDock can request access, but only you can approve or change the switch in System Settings.")
+            Text(L10n.tr("macOS controls the actual Files & Folders permission. WebDock can request access, but only you can approve or change the switch in System Settings."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             HStack {
-                Button("Open Privacy & Security") {
+                Button(L10n.tr("Open Privacy & Security")) {
                     browserCatalog.openPrivacySettings()
                 }
                 Spacer()
-                Button("Skip for Now") {
+                Button(L10n.tr("Skip for Now")) {
                     onboardingShown = true
                     dismiss()
                 }
-                Button("Request Access to Installed Browsers") {
+                Button(L10n.tr("Request Access to Installed Browsers")) {
                     browserCatalog.requestAccessForInstalledProfileBrowsers()
                     onboardingShown = true
                 }

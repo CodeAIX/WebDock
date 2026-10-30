@@ -1,0 +1,1 @@
+"NSAppDataUsageDescription" = "WebDock 仅读取浏览器账号配置元数据，以识别已登录账号并匹配本地配置。不会读取浏览记录、Cookie、密码或已保存的凭据。";

@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor
 final class ManagerWindowController: NSWindowController {
+    private let newShortcut = NewShortcutPresentation()
     init(environment: AppEnvironment) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
@@ -16,7 +17,7 @@ final class ManagerWindowController: NSWindowController {
         window.setFrameAutosaveName("WebDockManagerWindow")
         window.isReleasedWhenClosed = false
 
-        let root = ManagerView(environment: environment)
+        let root = ManagerView(environment: environment, newShortcut: newShortcut)
         window.contentView = NSHostingView(rootView: root.modifier(WebDockAppearance()))
 
         super.init(window: window)
@@ -30,5 +31,10 @@ final class ManagerWindowController: NSWindowController {
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    func presentNewShortcut() {
+        guard window?.attachedSheet == nil else { return }
+        newShortcut.isPresented = true
     }
 }

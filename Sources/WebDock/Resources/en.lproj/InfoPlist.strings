@@ -1,0 +1,1 @@
+"NSAppDataUsageDescription" = "WebDock reads browser profile metadata only to identify signed-in accounts and match them to local browser profiles. It does not read browsing history, cookies, passwords, or saved credentials.";

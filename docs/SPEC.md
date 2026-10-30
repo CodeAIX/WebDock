@@ -1,6 +1,6 @@
 # WebDock Product Specification — Portable Backup & Sync Architecture
 
-Status: active for v0.3.
+Status: active for v0.4.1; real-device acceptance is tracked separately.
 
 ## 1. Product
 
@@ -19,7 +19,7 @@ Supported platform: macOS 13.0+ on arm64 and x86_64.
 Primary creation surfaces:
 - Launcher `+`
 - Manager `+`
-- future `File > New Shortcut` / `⌘N`
+- `File > New Shortcut` / `⌘N` (build 7: Launcher, Library and Settings)
 
 Editable fields:
 - name
@@ -157,7 +157,6 @@ Launcher (UI-1):
 - ⌘N new shortcut, ⌘F search, ⌘, settings, ⌘1 Launcher, ⌘2 Library;
 - Return launches a single matching result;
 - search includes group names;
-- search;
 - `+` creation;
 - persistent drag reorder in the unfiltered All Shortcuts view;
 - subtle warning badge;

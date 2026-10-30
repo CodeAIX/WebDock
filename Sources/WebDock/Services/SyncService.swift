@@ -199,13 +199,13 @@ enum SyncDisplayState: Equatable {
     var summary: String {
         switch self {
         case .idle:
-            "Not syncing"
+            L10n.tr("Not syncing")
         case .syncing:
-            "Syncing…"
+            L10n.tr("Syncing…")
         case .success(let date):
-            "Last synced \(date.formatted(date: .omitted, time: .shortened))"
+            L10n.tr("Last synced %@", date.formatted(.dateTime.hour().minute().locale(L10n.locale)))
         case .failure(let message):
-            "Sync failed: \(message)"
+            L10n.tr("Sync failed: %@", L10n.message(message))
         case .unavailable(let message):
             message
         }
@@ -308,10 +308,10 @@ final class SyncCoordinator {
                 try await synchronize(with: provider)
                 SyncStatusCenter.shared.state = .success(Date())
             } catch {
-                SyncStatusCenter.shared.state = .failure(error.localizedDescription)
+                SyncStatusCenter.shared.state = .failure(L10n.errorDescription(error))
             }
         } catch {
-            SyncStatusCenter.shared.state = .failure(error.localizedDescription)
+            SyncStatusCenter.shared.state = .failure(L10n.errorDescription(error))
         }
     }
 
@@ -319,20 +319,20 @@ final class SyncCoordinator {
         let snapshot = try await makeProvider().load()
         if let snapshot {
             try dataStore.validateAssets(in: snapshot)
-            return "Remote library read successfully."
+            return L10n.tr("Remote library read successfully.")
         }
-        return "Server reached; no sync file found. Sync still requires a writable folder."
+        return L10n.tr("Server reached; no sync file found. Sync still requires a writable folder.")
     }
 
     private func makeProvider() throws -> any CanonicalSyncProvider {
         let defaults = UserDefaults.standard
         switch SyncPreferences.providerKind {
         case .off:
-            throw SyncError.providerNotConfigured("Sync is turned off.")
+            throw SyncError.providerNotConfigured(L10n.tr("Sync is turned off."))
         case .syncedFolder:
             guard let path = defaults.string(forKey: SyncPreferences.syncedFolderPathKey),
                   !path.isEmpty else {
-                throw SyncError.providerNotConfigured("Choose a synced folder first.")
+                throw SyncError.providerNotConfigured(L10n.tr("Choose a synced folder first."))
             }
             return SyncedFolderProvider(folderURL: URL(fileURLWithPath: path, isDirectory: true))
         case .webDAV:
@@ -340,7 +340,7 @@ final class SyncCoordinator {
                   let url = URL(string: rawURL),
                   let scheme = url.scheme?.lowercased(),
                   scheme == "https" || scheme == "http" else {
-                throw SyncError.providerNotConfigured("Enter a valid WebDAV HTTP or HTTPS folder URL.")
+                throw SyncError.providerNotConfigured(L10n.tr("Enter a valid WebDAV HTTP or HTTPS folder URL."))
             }
             let username = defaults.string(forKey: SyncPreferences.webDAVUsernameKey) ?? ""
             let password = try WebDAVCredentialStore.password(username: username)
@@ -374,13 +374,13 @@ enum SyncError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            "The sync server returned an invalid response."
+            L10n.tr("The sync server returned an invalid response.")
         case .httpStatus(let code):
-            "The sync server returned HTTP status \(code)."
+            L10n.tr("The sync server returned HTTP status %ld.", code)
         case .conflict:
-            "The remote sync file changed while WebDock was saving it."
+            L10n.tr("The remote sync file changed while WebDock was saving it.")
         case .unsupportedSchema(let version):
-            "The sync file uses unsupported schema version \(version)."
+            L10n.tr("The sync file uses unsupported schema version %ld.", version)
         case .providerNotConfigured(let message):
             message
         }

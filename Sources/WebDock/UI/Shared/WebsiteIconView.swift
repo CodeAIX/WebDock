@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct WebsiteIconView: View {
+    @ObservedObject private var language = AppLanguage.shared
     let shortcut: WebShortcut
     let resolution: ShortcutResolution
     @ObservedObject var service: ShortcutIconService
@@ -18,7 +19,7 @@ struct WebsiteIconView: View {
     }
 
     private var browserName: String {
-        resolution.browser?.displayName ?? browserURL?.deletingPathExtension().lastPathComponent ?? "System default browser"
+        resolution.browser?.displayName ?? browserURL?.deletingPathExtension().lastPathComponent ?? L10n.tr("System default browser")
     }
 
     var body: some View {
@@ -41,7 +42,7 @@ struct WebsiteIconView: View {
                     .resizable().frame(width: size * 0.36, height: size * 0.36)
                     .padding(2).background(.regularMaterial, in: Circle())
                     .offset(x: 4, y: 4)
-                    .accessibilityLabel("Opens with \(browserName)")
+                    .accessibilityLabel(L10n.tr("Opens with %@", browserName))
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -49,12 +50,12 @@ struct WebsiteIconView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: max(10, size * 0.22)))
                     .foregroundStyle(.yellow).offset(x: 4, y: -3)
-                    .help(resolution.warningMessage ?? "Launch fallback")
+                    .help(resolution.warningMessage.map(L10n.message) ?? L10n.tr("Launch fallback"))
             }
         }
-        .help(service.failed.contains(shortcut.id) ? "Website icon unavailable. Right-click to retry." : browserName)
+        .help(service.failed.contains(shortcut.id) ? L10n.tr("Website icon unavailable. Right-click to retry.") : browserName)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Website icon, \(browserName)")
+        .accessibilityLabel(L10n.tr("Website icon, %@", browserName))
         .task(id: shortcut.normalizedURLString + (shortcut.iconAssetID ?? "")) {
             await service.loadIfNeeded(shortcut)
         }

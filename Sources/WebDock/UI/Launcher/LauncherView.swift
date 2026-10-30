@@ -21,10 +21,10 @@ struct VisualEffectView: NSViewRepresentable {
 }
 
 struct ShortcutTileView: View {
+    @ObservedObject private var language = AppLanguage.shared
     let shortcut: WebShortcut
     let resolution: ShortcutResolution
     let iconService: ShortcutIconService
-    var selected = false
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -55,17 +55,16 @@ struct ShortcutTileView: View {
             isHovered ? Color.primary.opacity(0.06) : Color.clear,
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
         .contentShape(Rectangle())
           }
         .buttonStyle(.plain)
         .scaleEffect(isHovered && !reduceMotion ? 1.025 : 1)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isHovered)
         .onHover { isHovered = $0 }
-        .help(resolution.warningMessage ?? shortcut.normalizedURLString)
+        .help(resolution.warningMessage.map(L10n.message) ?? shortcut.normalizedURLString)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(shortcut.displayName), \(resolution.summary), account \(shortcut.accountDisplayUsername ?? "default")")
-        .accessibilityHint(resolution.warningMessage ?? "Open website")
+        .accessibilityLabel(L10n.tr("%@, %@, account %@", shortcut.displayName, resolution.summary, shortcut.accountDisplayUsername ?? L10n.tr("default")))
+        .accessibilityHint(resolution.warningMessage.map(L10n.message) ?? L10n.tr("Open website"))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -124,6 +123,7 @@ private struct ShortcutReorderDropDelegate: DropDelegate {
 }
 
 struct LauncherView: View {
+    @ObservedObject private var language = AppLanguage.shared
     let environment: AppEnvironment
     let onOpenManager: () -> Void
     let onPrepareSettings: () -> Void
@@ -140,11 +140,12 @@ struct LauncherView: View {
     @State private var searchText = ""
     @State private var errorMessage: String?
     @StateObject private var dragState = LauncherDragState()
-    @State private var showNewShortcutSheet = false
+    @ObservedObject private var newShortcut: NewShortcutPresentation
     @State private var showBrowserAccessOnboarding = false
 
-    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void, onPrepareSettings: @escaping () -> Void) {
+    init(environment: AppEnvironment, newShortcut: NewShortcutPresentation, onOpenManager: @escaping () -> Void, onPrepareSettings: @escaping () -> Void) {
         self.environment = environment
+        self.newShortcut = newShortcut
         self.onOpenManager = onOpenManager
         self.onPrepareSettings = onPrepareSettings
         _dataStore = ObservedObject(wrappedValue: environment.dataStore)
@@ -173,11 +174,11 @@ struct LauncherView: View {
             Button { sidebarVisible.toggle() } label: {
                 Image(systemName: "sidebar.left")
             }
-            .help("Toggle sidebar")
-            .accessibilityLabel("Toggle sidebar")
+            .help(L10n.tr("Toggle sidebar"))
+            .accessibilityLabel(L10n.tr("Toggle sidebar"))
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search websites", text: $searchText)
+                TextField(L10n.tr("Search websites"), text: $searchText)
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
                     .accessibilityIdentifier("launcher.search")
@@ -188,13 +189,12 @@ struct LauncherView: View {
             }
             .padding(10)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-            Button { showNewShortcutSheet = true } label: { Image(systemName: "plus") }
-                .keyboardShortcut("n")
-                .help("New shortcut (⌘N)")
-                .accessibilityLabel("New shortcut")
+            Button { newShortcut.isPresented = true } label: { Image(systemName: "plus") }
+                .help(L10n.tr("New shortcut (⌘N)"))
+                .accessibilityLabel(L10n.tr("New shortcut"))
             Button(action: onOpenManager) { Image(systemName: "rectangle.grid.1x2") }
-                .help("Manage shortcuts (⌘2)")
-                .accessibilityLabel("Manage shortcuts")
+                .help(L10n.tr("Manage shortcuts (⌘2)"))
+                .accessibilityLabel(L10n.tr("Manage shortcuts"))
             settingsButton
             Button { searchFocused = true } label: { EmptyView() }
                 .keyboardShortcut("f")
@@ -211,26 +211,26 @@ struct LauncherView: View {
         if #available(macOS 14.0, *) {
             LauncherSettingsButton(onPrepareSettings: onPrepareSettings)
                 .keyboardShortcut(",")
-                .help("Settings (⌘,)")
-                .accessibilityLabel("Settings")
+                .help(L10n.tr("Settings (⌘,)"))
+                .accessibilityLabel(L10n.tr("Settings"))
         } else {
             Button {
                 onPrepareSettings()
                 NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             } label: { Image(systemName: "gearshape") }
             .keyboardShortcut(",")
-            .help("Settings (⌘,)")
-            .accessibilityLabel("Settings")
+            .help(L10n.tr("Settings (⌘,)"))
+            .accessibilityLabel(L10n.tr("Settings"))
         }
     }
 
     private var sidebar: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Library").font(.caption).foregroundStyle(.secondary).padding(8)
-                sidebarRow("All Shortcuts", icon: "square.grid.2x2", groupID: nil)
+                Text(L10n.tr("Library")).font(.caption).foregroundStyle(.secondary).padding(8)
+                sidebarRow(L10n.tr("All Shortcuts"), icon: "square.grid.2x2", groupID: nil)
                 if !dataStore.activeGroups.isEmpty {
-                    Text("Groups").font(.caption).foregroundStyle(.secondary).padding(8)
+                    Text(L10n.tr("Groups")).font(.caption).foregroundStyle(.secondary).padding(8)
                     ForEach(dataStore.activeGroups) { group in
                         sidebarRow(group.name, icon: "folder", groupID: group.id)
                     }
@@ -285,7 +285,7 @@ struct LauncherView: View {
                 self.selectedGroupID = nil
             }
         }
-        .sheet(isPresented: $showNewShortcutSheet) {
+        .sheet(isPresented: $newShortcut.isPresented) {
             NewShortcutSheet(environment: environment)
         }
         .sheet(isPresented: $showBrowserAccessOnboarding) {
@@ -306,14 +306,14 @@ struct LauncherView: View {
             if let focusedShortcutID { pendingDelete = filtered.first { $0.id == focusedShortcutID } }
         }
         .onExitCommand { NSApp.keyWindow?.orderOut(nil) }
-        .confirmationDialog("Delete “\(pendingDelete?.displayName ?? "Shortcut")”?", isPresented: Binding(
+        .confirmationDialog(L10n.tr("Delete “%@”?", pendingDelete?.displayName ?? L10n.tr("Shortcut")), isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
         ), titleVisibility: .visible) {
-            Button("Delete Shortcut", role: .destructive) {
+            Button(L10n.tr("Delete Shortcut"), role: .destructive) {
                 if let shortcut = pendingDelete { perform { try environment.shortcutStore.delete(shortcut) } }
                 pendingDelete = nil
             }
-            Button("Cancel", role: .cancel) { pendingDelete = nil }
+            Button(L10n.tr("Cancel"), role: .cancel) { pendingDelete = nil }
         }
         .alert(
             "WebDock",
@@ -322,20 +322,20 @@ struct LauncherView: View {
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {}
+            Button(L10n.tr("OK"), role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "Unknown error")
+            Text(errorMessage ?? L10n.tr("Unknown error"))
         }
     }
 
     @ViewBuilder private var grid: some View {
         if filtered.isEmpty {
             WebDockEmptyStateView(
-                title: "No Shortcuts",
+                title: L10n.tr("No Shortcuts"),
                 systemImage: "globe",
                 message: searchText.isEmpty && selectedGroupID == nil
-                    ? "Click + to create your first website launch rule."
-                    : "No shortcuts match your search."
+                    ? L10n.tr("Click + to create your first website launch rule.")
+                    : L10n.tr("No shortcuts match your search.")
             )
         } else {
             GeometryReader { geometry in
@@ -347,7 +347,7 @@ struct LauncherView: View {
                             ForEach(filtered, id: \.id) { shortcut in
                                 ShortcutTileView(shortcut: shortcut,
                                     resolution: environment.deviceBindingResolver.resolution(for: shortcut),
-                                    iconService: environment.iconService, selected: focusedShortcutID == shortcut.id
+                                    iconService: environment.iconService
                                 ) { launch(shortcut) }
                                 .id(shortcut.id)
                                 .focusable()
@@ -388,32 +388,35 @@ struct LauncherView: View {
     }
 
     @ViewBuilder private func shortcutMenu(_ shortcut: WebShortcut) -> some View {
-        Button("Open") { launch(shortcut) }
-        Button("Edit") {
+        Button(L10n.tr("Open")) { launch(shortcut) }
+        Button(L10n.tr("Edit")) {
             environment.libraryNavigation.shortcutID = shortcut.id
             onOpenManager()
         }
-        Button("Duplicate") { perform { _ = try environment.shortcutStore.duplicate(shortcut) } }
+        Button(L10n.tr("Duplicate")) { perform { _ = try environment.shortcutStore.duplicate(shortcut) } }
         Divider()
-        Button("Change Icon…") { perform { try environment.iconService.chooseIcon(for: shortcut) } }
-        Button("Reset Icon") { perform { try environment.iconService.reset(shortcut) } }
-        Button("Retry Automatic Icon") { Task { await environment.iconService.loadIfNeeded(shortcut, force: true) } }
+        Button(L10n.tr("Change Icon…")) { perform { try environment.iconService.chooseIcon(for: shortcut) } }
+        Button(L10n.tr("Reset Icon")) { perform { try environment.iconService.reset(shortcut) } }
+        Button(L10n.tr("Retry Automatic Icon")) { Task { await environment.iconService.loadIfNeeded(shortcut, force: true) } }
             .disabled(shortcut.iconMode == "custom")
-        Menu("Move to Group") {
-            Button("None") { perform { try environment.shortcutStore.setGroup(nil, for: shortcut) } }
+        Menu(L10n.tr("Move to Group")) {
+            Button(L10n.tr("None")) { perform { try environment.shortcutStore.setGroup(nil, for: shortcut) } }
             ForEach(dataStore.activeGroups) { group in
                 Button(group.name) { perform { try environment.shortcutStore.setGroup(group.id, for: shortcut) } }
             }
         }
         Divider()
-        Button("Delete…", role: .destructive) { pendingDelete = shortcut }
+        Button(L10n.tr("Delete…"), role: .destructive) { pendingDelete = shortcut }
     }
 
     private func perform(_ action: () throws -> Void) {
-        do { try action() } catch { errorMessage = error.localizedDescription }
+        do { try action() } catch { errorMessage = L10n.errorDescription(error) }
     }
 
     private func launch(_ shortcut: WebShortcut) {
+        // Launcher tiles invoke an action; they are not persistent selections.
+        focusedShortcutID = nil
+        searchFocused = false
         do {
             let resolution = try environment.deviceBindingResolver.refreshBinding(for: shortcut)
             try environment.shortcutLauncher.launch(
@@ -422,7 +425,7 @@ struct LauncherView: View {
                 storageRoot: environment.runtimeStorage.rootURL
             )
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.errorDescription(error)
         }
     }
 
@@ -432,13 +435,14 @@ struct LauncherView: View {
                 try environment.shortcutStore.moveForDrop(shortcutID: sourceID, onto: targetID)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.errorDescription(error)
         }
     }
 }
 
 @available(macOS 14.0, *)
 private struct LauncherSettingsButton: View {
+    @ObservedObject private var language = AppLanguage.shared
     @Environment(\.openSettings) private var openSettings
     let onPrepareSettings: () -> Void
 

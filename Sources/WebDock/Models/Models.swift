@@ -53,8 +53,8 @@ enum SyncProviderKind: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .off: "Off"
-        case .syncedFolder: "Synced Folder"
+        case .off: L10n.tr("Off")
+        case .syncedFolder: L10n.tr("Synced Folder")
         case .webDAV: "WebDAV"
         }
     }

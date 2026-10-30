@@ -174,7 +174,7 @@ enum BrowserProfileDiscoveryError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidLocalState(let url):
-            "The browser profile metadata is not readable: \(url.path)."
+            L10n.tr("The browser profile metadata is not readable: %@.", url.path)
         }
     }
 }

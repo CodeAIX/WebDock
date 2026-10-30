@@ -36,6 +36,9 @@ jobs:
         run: |
           plutil -lint Config/Info.plist
           python3 scripts/validate_document_types.py Config/Info.plist
+          python3 scripts/validate_localizations.py
+          python3 scripts/validate_app_icon.py
+          bash -n scripts/collect_device_acceptance.sh
           grep -q 'macOS: "13.0"' project.yml
           if grep -R -n -E 'CloudKit|com\.apple\.developer\.icloud|import SwiftData' Config project.yml Sources/WebDock; then
             echo "CloudKit/iCloud entitlement or SwiftData dependency must not return."
@@ -78,4 +81,5 @@ jobs:
           APP_PLIST="$DERIVED_DATA/Build/Products/Debug/WebDock.app/Contents/Info.plist"
           plutil -lint "$APP_PLIST"
           python3 scripts/validate_document_types.py "$APP_PLIST"
+          python3 scripts/validate_app_icon.py --app "$DERIVED_DATA/Build/Products/Debug/WebDock.app"
           test "$(plutil -extract LSMinimumSystemVersion raw "$APP_PLIST")" = "13.0"

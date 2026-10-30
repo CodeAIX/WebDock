@@ -203,7 +203,7 @@ enum BackupError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedBackup:
-            "This file is not a supported WebDock backup."
+            L10n.tr("This file is not a supported WebDock backup.")
         }
     }
 }

@@ -275,7 +275,8 @@ final class ShortcutIconService: ObservableObject {
 
     func chooseIcon(for shortcut: WebShortcut) throws {
         let panel = NSOpenPanel()
-        panel.title = "Choose Website Icon"
+        panel.title = L10n.tr("Choose Website Icon")
+        panel.prompt = L10n.tr("Choose")
         panel.allowedContentTypes = [.png, .jpeg, .ico, .icns]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -310,9 +311,9 @@ enum IconError: LocalizedError {
     case invalidAsset, unavailable, payloadTooLarge
     var errorDescription: String? {
         switch self {
-        case .invalidAsset: "Choose a valid PNG, JPEG, ICO or ICNS image up to 4 MB."
-        case .unavailable: "The website icon is unavailable."
-        case .payloadTooLarge: "Portable icons exceed the limit of 512 assets or 32 MB. Reduce custom icon size before syncing or exporting."
+        case .invalidAsset: L10n.tr("Choose a valid PNG, JPEG, ICO or ICNS image up to 4 MB.")
+        case .unavailable: L10n.tr("The website icon is unavailable.")
+        case .payloadTooLarge: L10n.tr("Portable icons exceed the limit of 512 assets or 32 MB. Reduce custom icon size before syncing or exporting.")
         }
     }
 }

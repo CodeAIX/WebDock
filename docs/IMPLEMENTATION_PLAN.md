@@ -1,4 +1,8 @@
-# WebDock Implementation Plan — v0.3+
+# WebDock Implementation Plan — 0.4.1 (7)
+
+Updated 2026-10-30. Implementation is complete for the items below unless explicitly marked optional.
+Current evidence: 45 tests, macOS 13.0 target, universal Release, source/bundle contracts and isolated
+XMAC interaction checks. UI_V04_STATUS.md tracks live PRs; DEVICE_ACCEPTANCE.md tracks remaining gates.
 
 ## M9 — Manual-first portable launch rules
 Completed foundation:
@@ -10,7 +14,7 @@ Completed foundation:
 - device-only overrides.
 
 ## M10 — macOS 13 persistence and browser permission UX
-Current milestone:
+Implemented; native Intel and real account acceptance pending:
 - deployment target macOS 13.0;
 - universal arm64 + x86_64 Release build;
 - replace SwiftData with Codable JSON (`Canonical.json`, `DeviceBindings.json`);
@@ -21,7 +25,7 @@ Current milestone:
 - validate on Intel macOS 13.6.9 and current Apple Silicon macOS.
 
 ## M11 — Backup and restore
-Current milestone:
+Implemented and covered by backup/restore and offline integration tests:
 - daily automatic full local snapshot, retain newest 20 automatic snapshots;
 - manual Back Up Now;
 - portable `.webdockbackup` export excluding DeviceBindings/Profile N;
@@ -30,7 +34,7 @@ Current milestone:
 - automatic Pre-Sync snapshot when remote merge changes local canonical state.
 
 ## M12 — Cross-device sync without Apple entitlements
-Current milestone:
+Implemented; real two-Mac and production WebDAV acceptance pending:
 
 ### Synced Folder
 - user-selected ordinary directory;
@@ -51,13 +55,14 @@ Current milestone:
 There is no Apple cloud entitlement/provider roadmap.
 
 ## M13 — Product polish
-- favicon/icon cache;
-- groups UI;
-- keyboard navigation/accessibility;
-- app icon;
-- improved sync diagnostics/conflict presentation;
-- File > New Shortcut / Cmd-N;
-- optional client-side WebDAV payload encryption.
+- implemented: website/custom icons, portable icon backup/sync and browser badges;
+- implemented: group navigation, Library editor and six Settings pages;
+- implemented: keyboard navigation, accessible labels and single native focus indicator;
+- accepted by user: globe-and-Dock application icon;
+- implemented: sync status/error presentation, conditional writes and safety snapshots;
+- implemented in build 7: File > New Shortcut / Cmd-N across Launcher, Library and Settings;
+- implemented: system-default Chinese/English and manual language selection;
+- optional/deferred: client-side WebDAV payload encryption; no inactive setting is exposed.
 
 ## Release gates
 Every milestone requires:

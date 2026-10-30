@@ -266,11 +266,11 @@ enum WebDockDataStoreError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidSnapshot:
-            "The library contains invalid or duplicate records."
+            L10n.tr("The library contains invalid or duplicate records.")
         case .shortcutNotFound:
-            "The shortcut could not be found in WebDock's local store."
+            L10n.tr("The shortcut could not be found in WebDock's local store.")
         case .unsupportedSchema(let version):
-            "This WebDock data file uses unsupported schema version \(version)."
+            L10n.tr("This WebDock data file uses unsupported schema version %ld.", version)
         }
     }
 }

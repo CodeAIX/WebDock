@@ -45,12 +45,12 @@ struct ShortcutResolution {
     }
 
     var summary: String {
-        guard let browser else { return "System default browser" }
+        guard let browser else { return L10n.tr("System default browser") }
         if let profile {
             let account = profile.accountEmail ?? profile.localProfileName ?? profile.profileDirectory
             return "\(browser.displayName) · \(account)"
         }
-        return "\(browser.displayName) · browser default"
+        return L10n.tr("%@ · browser default", browser.displayName)
     }
 }
 
@@ -221,9 +221,9 @@ enum DeviceBindingError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .browserNotInstalled:
-            "The browser selected for this Mac is not installed."
+            L10n.tr("The browser selected for this Mac is not installed.")
         case .profileNotFound:
-            "The browser profile selected for this Mac no longer exists."
+            L10n.tr("The browser profile selected for this Mac no longer exists.")
         }
     }
 }

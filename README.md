@@ -2,6 +2,10 @@
 
 WebDock is a native macOS website launcher that lives as one icon in the Dock.
 
+Download [WebDock 0.5.0](https://github.com/CodeAIX/WebDock/releases/tag/v0.5.0) for macOS 13+,
+Intel and Apple Silicon. The release provides DMG and ZIP packages, source and SHA-256 checksums.
+Packages use ad-hoc signing; Developer ID signing and Apple notarization are not configured.
+
 Its core object is a **portable website launch rule** rather than a browser-exported shortcut file:
 
 `URL + preferred browser family + optional account email + name/group/order`
@@ -21,7 +25,7 @@ Each Mac resolves that portable intent to its own installed browser and local pr
 - Cross-device sync providers are **Synced Folder** and **WebDAV**.
 - A Synced Folder may live in iCloud Drive, Dropbox, OneDrive, Syncthing, a NAS-mounted directory, or any other ordinary file-sync location. WebDock itself uses no Apple cloud service entitlement.
 
-## UI v0.4
+## Interface
 
 Launcher keeps search, New, Library and Settings in a fixed bar above a remembered group sidebar.
 Tiles show website icons, the resolved browser badge and account username; warnings keep fallbacks
@@ -33,6 +37,16 @@ Library uses four editor cards with explicit Save Changes and separate local ove
 Settings has six sidebar pages, theme, density, subtitle and badge preferences. Custom and automatic
 icons travel in backup/sync JSON; all devices editing icons should use v0.4 because v0.3 writers
 cannot retain unknown metadata. Real-device acceptance status is tracked in docs/UI_V04_STATUS.md.
+
+### Chinese and English
+
+Settings → General → Display Language offers Follow System (default), 简体中文 and English.
+App content changes immediately and draft edits are retained; restart WebDock to fully update
+macOS-owned menus and system dialogs. This preference belongs to each Mac and does not sync.
+Version 0.5.0 includes the accepted globe-and-Dock icon, single Launcher focus indicator and
+native File → New Shortcut / ⌘N command across Launcher, Library and Settings. The user confirmed
+Intel macOS 13.6.9 validation passed and authorized this release. Evidence boundaries and additional
+device scenarios are documented in docs/DEVICE_ACCEPTANCE.md.
 
 ## Browser account access
 
@@ -67,6 +81,10 @@ Synchronization transports portable rules and referenced icon assets, excluding 
 - no embedded browser/WebView
 - no private Dock APIs or Accessibility hacks
 - no Apple cloud entitlement
+
+Build with Xcode 26 or later and XcodeGen; the icon source uses Apple's `.icon` format.
+The deployment target remains macOS 13.0. A standalone ICNS and reproduction notes are in
+Design/AppIcon/.
 
 ## Architecture docs
 

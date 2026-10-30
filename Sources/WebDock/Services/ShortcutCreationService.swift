@@ -58,7 +58,7 @@ enum ShortcutCreationError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "Enter a valid HTTP or HTTPS URL."
+            L10n.tr("Enter a valid HTTP or HTTPS URL.")
         }
     }
 }

@@ -12,6 +12,7 @@ enum GridDensity: String, CaseIterable, Identifiable {
 }
 
 struct AppearanceSettingsView: View {
+    @ObservedObject private var language = AppLanguage.shared
     @AppStorage("WebDock.theme") private var theme = "system"
     @AppStorage("WebDock.gridDensity") private var density = GridDensity.standard.rawValue
     @AppStorage("WebDock.subtitleMode") private var subtitle = "account"
@@ -19,32 +20,33 @@ struct AppearanceSettingsView: View {
     @AppStorage("WebDock.showWarningBadge") private var warningBadge = true
     @AppStorage("WebDock.launcherSidebarVisible") private var sidebar = true
     var body: some View {
-        Section("Theme") {
-            Picker("Appearance", selection: $theme) {
-                Text("System").tag("system")
-                Text("Light").tag("light")
-                Text("Dark").tag("dark")
+        Section(L10n.tr("Theme")) {
+            Picker(L10n.tr("Appearance"), selection: $theme) {
+                Text(L10n.tr("System")).tag("system")
+                Text(L10n.tr("Light")).tag("light")
+                Text(L10n.tr("Dark")).tag("dark")
             }
         }
-        Section("Shortcuts") {
-            Picker("Grid Density", selection: $density) {
-                ForEach(GridDensity.allCases) { Text($0.rawValue).tag($0.rawValue) }
+        Section(L10n.tr("Shortcuts")) {
+            Picker(L10n.tr("Grid Density"), selection: $density) {
+                ForEach(GridDensity.allCases) { Text(L10n.tr($0.rawValue)).tag($0.rawValue) }
             }
-            Picker("Subtitle", selection: $subtitle) {
-                Text("Account Username").tag("account")
-                Text("Domain").tag("domain")
-                Text("Hidden").tag("hidden")
+            Picker(L10n.tr("Subtitle"), selection: $subtitle) {
+                Text(L10n.tr("Account Username")).tag("account")
+                Text(L10n.tr("Domain")).tag("domain")
+                Text(L10n.tr("Hidden")).tag("hidden")
             }
-            Toggle("Show browser badge", isOn: $browserBadge)
-            Toggle("Show warning badge", isOn: $warningBadge)
-            Toggle("Show sidebar", isOn: $sidebar)
+            Toggle(L10n.tr("Show browser badge"), isOn: $browserBadge)
+            Toggle(L10n.tr("Show warning badge"), isOn: $warningBadge)
+            Toggle(L10n.tr("Show sidebar"), isOn: $sidebar)
         }
     }
 }
 
 struct WebDockAppearance: ViewModifier {
+    @ObservedObject private var language = AppLanguage.shared
     @AppStorage("WebDock.theme") private var theme = "system"
     func body(content: Content) -> some View {
-        content.preferredColorScheme(theme == "light" ? .light : theme == "dark" ? .dark : nil)
+        content.environment(\.locale, L10n.locale).preferredColorScheme(theme == "light" ? .light : theme == "dark" ? .dark : nil)
     }
 }

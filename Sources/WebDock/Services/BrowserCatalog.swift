@@ -25,10 +25,10 @@ enum BrowserProfileAccessStatus: Equatable {
 
     var label: String {
         switch self {
-        case .unknown: "Not checked"
-        case .notApplicable: "Not required"
-        case .authorized(let count): count == 1 ? "1 profile available" : "\(count) profiles available"
-        case .needsAuthorization: "Account access required"
+        case .unknown: L10n.tr("Not checked")
+        case .notApplicable: L10n.tr("Not required")
+        case .authorized(let count): count == 1 ? L10n.tr("1 profile available") : L10n.tr("%ld profiles available", count)
+        case .needsAuthorization: L10n.tr("Account access required")
         case .unavailable(let message): message
         }
     }
@@ -203,7 +203,7 @@ final class BrowserCatalog: ObservableObject {
             if Self.isPermissionError(error) {
                 status = .needsAuthorization
             } else {
-                status = .unavailable(error.localizedDescription)
+                status = .unavailable(L10n.errorDescription(error))
             }
             accessStatuses[browser.bundleIdentifier] = status
             return status
@@ -230,7 +230,7 @@ final class BrowserCatalog: ObservableObject {
         } catch {
             accessStatuses[browser.bundleIdentifier] = Self.isPermissionError(error)
                 ? .needsAuthorization
-                : .unavailable(error.localizedDescription)
+                : .unavailable(L10n.errorDescription(error))
             return []
         }
     }

@@ -9,6 +9,7 @@ final class LauncherPanel: NSPanel {
 @MainActor
 final class LauncherPanelController: NSWindowController {
     private let positionResolver = DockPositionResolver()
+    private let newShortcut = NewShortcutPresentation()
 
     var isVisible: Bool {
         window?.isVisible == true
@@ -32,6 +33,7 @@ final class LauncherPanelController: NSWindowController {
 
         let root = LauncherView(
             environment: environment,
+            newShortcut: newShortcut,
             onOpenManager: onOpenManager,
             onPrepareSettings: onPrepareSettings
         )
@@ -54,5 +56,10 @@ final class LauncherPanelController: NSWindowController {
 
     func hide() {
         window?.orderOut(nil)
+    }
+
+    func presentNewShortcut() {
+        guard window?.attachedSheet == nil else { return }
+        newShortcut.isPresented = true
     }
 }
