@@ -6,6 +6,7 @@ final class AppEnvironment {
     let runtimeStorage: RuntimeStorage
     let dataStore: WebDockDataStore
     let backupService: BackupService
+    let iconService: ShortcutIconService
     let shortcutLauncher: ShortcutLauncher
     let shortcutStore: ShortcutStore
     let shortcutCreationService: ShortcutCreationService
@@ -17,6 +18,7 @@ final class AppEnvironment {
         runtimeStorage = try RuntimeStorage(rootURL: rootURL)
         dataStore = try WebDockDataStore(rootURL: runtimeStorage.rootURL)
         backupService = try BackupService(dataStore: dataStore)
+        iconService = try ShortcutIconService(dataStore: dataStore, backupService: backupService)
         browserCatalog = BrowserCatalog()
         shortcutLauncher = ShortcutLauncher()
         shortcutStore = ShortcutStore(dataStore: dataStore)

@@ -23,30 +23,19 @@ struct VisualEffectView: NSViewRepresentable {
 struct ShortcutTileView: View {
     let shortcut: WebShortcut
     let resolution: ShortcutResolution
+    let iconService: ShortcutIconService
     let action: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         VStack(spacing: 8) {
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.quaternary)
-                    .frame(width: 60, height: 60)
-                Image(systemName: "globe")
-                    .font(.system(size: 28, weight: .medium))
-                    .frame(width: 60, height: 60)
-                if resolution.hasWarning {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.yellow)
-                        .offset(x: 5, y: -4)
-                }
-            }
+            WebsiteIconView(shortcut: shortcut, resolution: resolution, service: iconService)
             Text(shortcut.displayName)
                 .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.tail)
+            Text(shortcut.displaySubtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -290,7 +279,8 @@ struct LauncherView: View {
                         let resolution = environment.deviceBindingResolver.resolution(for: shortcut)
                         ShortcutTileView(
                             shortcut: shortcut,
-                            resolution: resolution
+                            resolution: resolution,
+                            iconService: environment.iconService
                         ) {
                             launch(shortcut)
                         }
