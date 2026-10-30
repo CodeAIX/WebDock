@@ -61,11 +61,13 @@ The collector only inspects this package and host. Nothing below is automaticall
 Record actual results and screenshots; use a separate test library and disposable test websites.
 Do not put account passwords, WebDAV passwords or browser profile contents in this report.
 
-- [ ] Native launch and Dock reopen/toggle work; app icon matches the accepted globe-and-Dock design.
+- [ ] Native launch and Dock reopen/toggle work; the globe/orbit/Dock app icon displays correctly.
 - [ ] Launcher / Library / all six Settings pages render; no duplicate mouse-selection frame.
 - [ ] Create, edit, reorder and delete persist after a real app restart.
 - [ ] Chinese / English / Follow System work; restart updates native menus; editor draft survives.
 - [ ] Keyboard search / Return / arrows / Escape and VoiceOver labels work.
+- [ ] Global shortcut summons Launcher from another foreground app; custom/disabled/reset state survives restart.
+- [ ] App ICNS picker, runtime Dock/app-switcher override and reset survive restart without changing bundle signature.
 - [ ] Manual icon selection / reset / offline rendering work in light and dark appearances.
 - [ ] Account metadata permission is handled by macOS; selected account opens the correct real browser profile.
 - [ ] Missing browser/account fallback works; this Mac's override stays local.

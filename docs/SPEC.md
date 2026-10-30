@@ -1,230 +1,96 @@
-# WebDock Product Specification — Portable Backup & Sync Architecture
+# WebDock product specification
 
-Status: released v0.5.0 with explicitly marked v0.5.1 candidate additions; real-device acceptance is tracked separately.
+## Platform and interface
 
-## 1. Product
+Native Swift/SwiftUI/AppKit macOS application, macOS 13.0+, Intel and Apple Silicon.
+One Dock entry opens a floating Launcher. Library provides persistent editing; Settings has
+General, Browsers & Accounts, Sync, Backup & Restore, Appearance and Privacy pages.
 
-WebDock is a native macOS Dock launcher for portable website launch rules. Users manually create and edit shortcuts; browser-exported shortcut files are not part of the workflow.
+Launcher supports website/group search, group filtering, website icons, browser/warning badges,
+keyboard navigation, contextual actions and drag ordering in unfiltered All Shortcuts.
+Clicking the Dock entry toggles Launcher; activation is deferred until the app is active.
 
-Canonical shortcut intent:
+## Website rules
 
-`Name + HTTP/HTTPS URL + optional BrowserFamily + optional Account Email + Group + Order`
+Manually create rules through Launcher/Library `+` or File → New Shortcut / ⌘N.
+A rule contains stable UUID, name, HTTP/HTTPS URL, optional browser family, optional account
+email, group/order, website icon metadata and created/updated/deleted timestamps.
+Edit, duplicate and delete actions preserve unsaved-draft handling. Deletions use tombstones.
+Shortcut-file imports and HTTP/HTTPS handler registration are not supported.
 
-Each Mac resolves that intent into its own installed browser and local Chromium profile.
+## Browser resolution
 
-Supported platform: macOS 13.0+ on arm64 and x86_64.
-
-### Global Launcher shortcut (0.5.1 candidate, build 10)
-
-- Default: Control–Option–W (⌃⌥W), enabled for ordinary installations while WebDock is running.
-- Opens and activates Launcher from another app; repeated presses keep Launcher visible.
-- An existing modal sheet/draft is brought forward instead of opening a competing flow.
-- General Settings provides enable/disable, focused key-combination recording and Restore Default.
-- Escape, leaving the recording view or switching applications cancels recording and restores the
-  old registration. Plain typing and Shift-only combinations are rejected.
-- System symbolic shortcuts and exclusive native hotkey registrations are checked; failed
-  replacement preserves the prior choice. Startup failure is nonfatal and offers retry.
-- Public Carbon RegisterEventHotKey is used, without accessibility/event-tap permission or a
-  global keyboard monitor. ⌘1/⌘2 remain app menu commands.
-- Chord and enablement are device-local UserDefaults, excluded from canonical records and sync.
-  Isolated diagnostic installations default to disabled to avoid competing with the normal app.
-
-## 2. Creation and editing
-
-Primary creation surfaces:
-- Launcher `+`
-- Manager `+`
-- `File > New Shortcut` / `⌘N` (build 7: Launcher, Library and Settings)
-
-Editable fields:
-- name
-- URL
-- preferred browser family
-- target account email for supported Chromium-family browsers
-- group/order when surfaced
-
-WebDock does not register or import `.crwebloc`, `.webloc`, or `.url` files.
-
-## 3. Portable browser/account identity
-
-Browser intent uses BrowserFamily rather than an installation path or bundle instance.
-
-Cross-device account identity is the signed-in account email reported in local Chromium profile metadata.
-
-Never export/sync `Default`, `Profile 1`, `Profile 12`, or another local profile directory.
-
-Email normalization:
-- trim whitespace;
-- lowercase for comparison;
-- no Gmail-specific dot/plus canonicalization.
-
-## 4. Device-local resolution
-
-Each Mac stores DeviceShortcutBinding separately from canonical data.
+Supported families: Safari, Chrome, Chromium, Edge, Firefox, Brave, Arc and Vivaldi.
+Account routing: Chrome, Chromium, Edge, Brave and Vivaldi, using locally reported signed-in email.
+Normalize email by trimming and lowercasing, without Gmail dot/plus rewriting.
 
 Resolution order:
-1. valid device-only override;
-2. preferred browser installed + one matching email profile -> exact local profile;
-3. browser installed but email absent -> browser default + `missingAccount` warning;
-4. multiple local profiles with same email -> browser default + `ambiguousAccount` warning;
-5. preferred browser missing -> system default + `missingBrowser` warning;
-6. no preferred browser -> system default.
+1. Valid device-only override.
+2. Installed browser and exactly one matching email profile.
+3. Missing or ambiguous account: selected browser default with a warning.
+4. Missing browser: system default browser with a warning.
+5. No preference: system default browser.
 
-Fallbacks keep shortcuts launchable. Warnings do not block launch.
+The URL, browser family and optional email are portable intent. Local application paths and
+`Default` / `Profile N` directory names are device-local implementation details.
+Chromium launching uses transient URL/CrProfile routing files opened explicitly with that browser.
+These runtime files are never portable data.
 
-## 5. Browser account permission UX
+## Global Launcher shortcut
 
-WebDock may need macOS Files & Folders approval to read another browser's profile metadata.
+Default Control–Option–W (⌃⌥W), enabled in ordinary installations while WebDock is running.
+General Settings offers enable/disable, focused recording, conflict reporting and Restore Default.
+A combination requires Control, Option or Command with a non-modifier key; Shift-only/plain typing
+is rejected. Escape, switching away or leaving the view cancels recording.
 
-Requirements:
-- explain the request before attempting access;
-- first-run Browser Account Access guidance;
-- Settings > Browsers & Accounts lists installed supported browsers;
-- per-browser Authorize/Rescan action;
-- best-effort Open Privacy & Security shortcut;
-- never claim WebDock can grant or toggle the system permission itself;
-- `NSAppDataUsageDescription` explains the metadata-only use.
+Public Carbon exclusive registration and enabled system symbolic-hotkey checks detect reported
+conflicts. Failed replacement restores the previous choice; startup registration failure is
+nonfatal and offers retry. Existing sheets are brought forward instead of opening another flow.
+Activation waits until the application is active and survives late resign notifications.
+No event tap, global keyboard monitor or accessibility/input-monitoring grant is used.
+⌘1, ⌘2, ⌘N, ⌘F and ⌘, remain app commands.
 
-WebDock does not read cookies, passwords, browsing history, tokens, or page content.
+## Language and appearance
 
-## 6. Launch behavior
+Simplified Chinese and English; follow system or choose manually. App content changes immediately;
+restart updates native menus/dialogs. System/light/dark themes, density, subtitle and badge options
+are local preferences. Settings rows respond across their full padded hit target.
 
-- system default -> open URL through macOS;
-- selected browser without resolved profile -> explicitly open URL in that browser;
-- Chromium browser with resolved local profile -> create a transient `URL + CrProfile` routing `.crwebloc` and explicitly open it with that local browser;
-- transient routing files are runtime cache only and never portable data.
+The bundled icon uses globe/orbit/Dock artwork, modern compiled resources and earlier-system
+representations. A local ICNS override changes the running Dock/app-switcher icon, persists after
+restart and supports reset. Finder uses the installed default. Signed bundle resources and Finder
+metadata are not modified. Input ICNS must decode correctly, have a valid header/length and be at
+most 16 MiB; it is copied atomically to local Appearance/CustomAppIcon.icns.
 
-## 7. Local persistence
+## Storage, backup and sync
 
-Persistence uses Codable JSON, not SwiftData.
+Codable JSON under Application Support/WebDock, with atomic writes:
+Canonical.json, DeviceBindings.json, Icons/, Backups/, Cache/ and Appearance/.
+Appearance/language/global-hotkey preferences are stored locally in UserDefaults as applicable.
 
-```text
-Application Support/WebDock/
-  Canonical.json
-  DeviceBindings.json
-  Backups/
-  Cache/
-```
+Automatic full local snapshots run at most daily and retain the newest 20 automatic snapshots.
+Manual backup, portable export, Replace Restore and Merge Restore are supported. Restore makes
+a Pre-Restore snapshot; synchronization makes a Pre-Sync snapshot before changing local data.
 
-Canonical deletion writes `deletedAt` tombstones instead of immediately destroying record identity.
+Portable snapshots contain canonical rules, groups, tombstones and referenced website icon assets.
+They exclude browser paths/profiles, bindings, overrides, warnings, caches and runtime preferences.
+Exactly one sync provider is active: Off, Synced Folder or WebDAV. Both use WebDockSync.json.
+WebDAV passwords use Keychain; ETag/If-Match and first-create If-None-Match protect writes.
+Conflicts use whole-record UUID + updatedAt/tombstone merging. See SYNC_AND_DEVICE_RESOLUTION.md.
 
-## 8. Backup & restore
+## Permissions and privacy
 
-Automatic backups:
-- full local snapshot;
-- at most one automatic snapshot per day;
-- retain newest 20 automatic snapshots.
+Read browser profile metadata directly so genuine missing files and permission denial remain
+distinguishable. First-run guidance and per-browser Authorize/Rescan explain and initiate reads;
+macOS controls actual Files & Folders authorization.
+No browser cookies, passwords, history, tokens or page content are read. Website-icon discovery
+uses a bounded ephemeral request without browser cookies/credentials. Portable data includes
+configured account emails and website icons, so destination selection belongs to the user.
 
-Safety backups:
-- create a Pre-Restore snapshot before restore;
-- create a Pre-Sync snapshot before applying remote changes.
+## Validation contract
 
-Manual actions:
-- Back Up Now;
-- Export Portable Backup…;
-- Restore from Backup…;
-- Open Backup Folder.
-
-Portable `.webdockbackup` contains canonical data only and excludes DeviceBindings/Profile N.
-
-Restore modes:
-- Replace Current Library;
-- Merge with Current Library using stable UUID + newest-record-wins/tombstone semantics.
-
-## 9. Sync contract
-
-Exactly one provider may be active:
-- Off
-- Synced Folder
-- WebDAV
-
-Sync only canonical intent:
-- shortcut/group UUID;
-- name;
-- URL;
-- BrowserFamily;
-- target account email;
-- group/order;
-- created/updated/deleted timestamps.
-
-Never sync DeviceShortcutBinding, local bundle paths, Profile N, warning state, local overrides, runtime cache, browser credentials, or WebDAV password.
-
-### Synced Folder
-
-User selects an ordinary folder. WebDock reads/writes `WebDockSync.json`. The folder may independently be synchronized by iCloud Drive, Dropbox, OneDrive, Syncthing, NAS software, etc. WebDock has no Apple cloud entitlement/provider.
-
-### WebDAV
-
-- existing folder URL;
-- username in preferences;
-- password/app-password in macOS Keychain;
-- canonical `WebDockSync.json` only;
-- ETag / `If-Match` conditional writes;
-- `If-None-Match: *` on first create;
-- HTTP 412 triggers conflict reload/merge retry.
-
-## 10. UI
-
-Launcher (UI-1):
-- fixed full-width content top bar, independent of sidebar visibility;
-- persistent local sidebar visibility, initially shown, with All Shortcuts and existing groups;
-- direct Settings and Library actions;
-- ⌘N new shortcut, ⌘F search, ⌘, settings, ⌘1 Launcher, ⌘2 Library;
-- Return launches a single matching result;
-- search includes group names;
-- `+` creation;
-- persistent drag reorder in the unfiltered All Shortcuts view;
-- subtle warning badge;
-- click launch with fallback.
-
-Manager:
-- list/edit/delete;
-- portable launch rule fields;
-- `This Mac` resolution and device-only override.
-
-Settings:
-- Browsers & Accounts permission status/actions;
-- Sync provider + provider-specific configuration + Sync Now;
-- Backup & Restore actions;
-- privacy/device-resolution explanation.
-
-## 11. Acceptance
-
-- macOS deployment target 13.0;
-- universal arm64 + x86_64 Release artifact;
-- no SwiftData dependency;
-- no Apple cloud entitlement/provider;
-- no browser shortcut-file import handler;
-- manual creation/edit/reorder remains functional;
-- account email, never Profile N, is portable identity;
-- missing/ambiguous account and missing browser fall back with warnings;
-- local override remains device-only;
-- local JSON persists across restart;
-- portable backup excludes DeviceBindings/Profile N;
-- replace/merge restore works and creates safety backup;
-- Synced Folder round-trip works;
-- WebDAV uses Keychain + conditional writes;
-- two Macs may resolve the same email to different Profile N directories;
-- real acceptance includes Intel macOS 13.6.9 and a current Apple Silicon Mac;
-- CI + universal Release smoke build pass before merge.
-
-## Device-local application icon (0.5.1 candidate)
-
-Appearance can import an ICNS for the running Dock/app-switcher icon and restore the default.
-The copy is stored under Appearance/CustomAppIcon.icns on this Mac and reapplied after restart;
-it is excluded from canonical records, portable backup and sync. Finder keeps the installed app
-icon. Do not rewrite signed app resources or attach Finder custom-icon metadata to the bundle.
-
-## UI-3 website icons
-
-Shortcuts add optional iconMode/iconAssetID/iconSourceURL fields; legacy JSON remains readable.
-Icons are normalized to PNG (at most 512 pixels), addressed by SHA-256 in Icons/, and rendered
-inside continuous rounded containers with the resolved local browser's app icon. Account username
-is presentation only; email retains its identity semantics. Before the first icon metadata edit,
-a Pre-Icon-Metadata local snapshot is required.
-
-Automatic discovery reads unauthenticated origin homepage icon links and manifests using an ephemeral
-session without shared cookies/credentials. Priority: manifest, apple touch icon, favicon, origin
-fallbacks, globe. Downloads are bounded in size/time; failures never block launch. Manual choice
-wins over in-flight automatic discovery. Reset returns to automatic mode. UI-4 transports assets;
-UI-3 alone renders and stores them locally.
+macOS 13 deployment, universal Release, source/localization/icon/LaunchServices validation,
+unit/integration tests, strict signature/package checks and current-head CI before merge.
+Actual browser permissions/profile routing, native hardware, external sync services and VoiceOver
+require real-device evidence. Diagnostic roots disable automatic backups and sync and default
+the global shortcut off so they do not compete with normal installations.

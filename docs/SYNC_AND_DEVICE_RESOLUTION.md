@@ -1,6 +1,6 @@
 # WebDock Sync, Backup & Device Resolution
 
-Status: authoritative architecture for WebDock 0.3+
+Canonical and device-local data contracts.
 
 ## 1. Product definition
 
@@ -159,7 +159,7 @@ HTTPS is recommended for remote WebDAV servers.
 
 Every canonical object has a stable UUID and `updatedAt`.
 
-Initial merge policy:
+Merge policy:
 - different UUIDs merge;
 - same UUID -> newer `updatedAt` wins;
 - deletion is represented by a `deletedAt` tombstone and participates in the same rule.
@@ -221,14 +221,13 @@ and the shortcut shows a visible missing-account warning.
 - no SwiftData dependency
 - no macOS 14-only UI without fallback
 
-## UI-4 portable icons (additive v1 extension)
+## Portable website icons
 
 Canonical shortcut iconMode/iconAssetID/iconSourceURL are optional. Canonical.json contains metadata
 only. Portable snapshots add optional `iconAssets: { SHA256: base64PNG }` to the existing JSON
 snapshot, used by Synced Folder, WebDAV, portable export and local safety snapshots. Embedding
 assets keeps each provider's single-file atomic/ETag transaction; no sidecar directory or remote
-MKCOL permission is needed. Existing v1 files without assets remain readable. All participating
-Macs should use v0.4 before editing icons: older v0.3 writers do not retain unknown fields.
+MKCOL permission is needed. Existing v1 files without assets remain readable. Keep Macs sharing icon data on the same current version so every writer preserves the icon fields.
 
 Only referenced active icons are exported; no local absolute path, binding or browser badge is
 portable. Assets are limited to 512 × 512 normalized PNG, 4 MiB each, 512 entries and 32 MiB total.
