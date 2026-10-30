@@ -12,6 +12,10 @@ struct WebDockApp: App {
         }
         .environment(\.locale, L10n.locale)
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button(L10n.tr("New Shortcut")) { appDelegate.newShortcut() }
+                    .keyboardShortcut("n")
+            }
             CommandGroup(after: .windowArrangement) {
                 Button(L10n.tr("Open Launcher")) { appDelegate.openLauncher() }
                     .keyboardShortcut("1")

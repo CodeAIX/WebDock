@@ -33,6 +33,7 @@ jobs:
           python3 scripts/validate_document_types.py Config/Info.plist
           python3 scripts/validate_localizations.py
           python3 scripts/validate_app_icon.py
+          bash -n scripts/collect_device_acceptance.sh
           grep -q 'macOS: "13.0"' project.yml
           if grep -R -n -E 'CloudKit|com\.apple\.developer\.icloud|import SwiftData' Config project.yml Sources/WebDock; then
             echo "CloudKit/iCloud entitlement or SwiftData dependency must not return."
@@ -98,6 +99,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP"
           shasum -a 256 "$ZIP" | tee "$OUTPUT_DIR/WebDock-smoke-macos.zip.sha256"
           unzip -t "$ZIP"
+          cp scripts/collect_device_acceptance.sh docs/DEVICE_ACCEPTANCE.md "$OUTPUT_DIR/"
 
       - name: Upload smoke artifact
         uses: actions/upload-artifact@v4
@@ -106,5 +108,7 @@ jobs:
           path: |
             ${{ runner.temp }}/WebDockSmoke/WebDock-smoke-macos.zip
             ${{ runner.temp }}/WebDockSmoke/WebDock-smoke-macos.zip.sha256
+            ${{ runner.temp }}/WebDockSmoke/collect_device_acceptance.sh
+            ${{ runner.temp }}/WebDockSmoke/DEVICE_ACCEPTANCE.md
           if-no-files-found: error
           retention-days: 14

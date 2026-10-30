@@ -140,11 +140,12 @@ struct LauncherView: View {
     @State private var searchText = ""
     @State private var errorMessage: String?
     @StateObject private var dragState = LauncherDragState()
-    @State private var showNewShortcutSheet = false
+    @ObservedObject private var newShortcut: NewShortcutPresentation
     @State private var showBrowserAccessOnboarding = false
 
-    init(environment: AppEnvironment, onOpenManager: @escaping () -> Void, onPrepareSettings: @escaping () -> Void) {
+    init(environment: AppEnvironment, newShortcut: NewShortcutPresentation, onOpenManager: @escaping () -> Void, onPrepareSettings: @escaping () -> Void) {
         self.environment = environment
+        self.newShortcut = newShortcut
         self.onOpenManager = onOpenManager
         self.onPrepareSettings = onPrepareSettings
         _dataStore = ObservedObject(wrappedValue: environment.dataStore)
@@ -188,8 +189,7 @@ struct LauncherView: View {
             }
             .padding(10)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-            Button { showNewShortcutSheet = true } label: { Image(systemName: "plus") }
-                .keyboardShortcut("n")
+            Button { newShortcut.isPresented = true } label: { Image(systemName: "plus") }
                 .help(L10n.tr("New shortcut (⌘N)"))
                 .accessibilityLabel(L10n.tr("New shortcut"))
             Button(action: onOpenManager) { Image(systemName: "rectangle.grid.1x2") }
@@ -285,7 +285,7 @@ struct LauncherView: View {
                 self.selectedGroupID = nil
             }
         }
-        .sheet(isPresented: $showNewShortcutSheet) {
+        .sheet(isPresented: $newShortcut.isPresented) {
             NewShortcutSheet(environment: environment)
         }
         .sheet(isPresented: $showBrowserAccessOnboarding) {

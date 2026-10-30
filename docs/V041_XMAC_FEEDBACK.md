@@ -1,4 +1,4 @@
-# WebDock 0.4.1 (6) — XMAC feedback follow-up
+# WebDock 0.4.1 (7) — XMAC feedback follow-up
 
 Date: 2026-10-30. Base: UI-5 commit 4852fed. Branch: feat/v0.4.1-branding-localization.
 The user reports XMAC validation is basically normal, with three remaining issues. This branch
@@ -44,11 +44,17 @@ portable identities. The Chromium launch payload remains URL + CrProfile in ever
 
 ## Validation / remaining acceptance
 
-Local combined suite: 42 tests. Build target remains macOS 13.0 and Release arm64 + x86_64.
+Local combined suite: 45 tests, including three real loopback HTTP WebDAV integration tests.
+Build 7 also completes File > New Shortcut / ⌘N from Launcher, Library and Settings. The window
+controller owns its creation presentation; repeated commands retain the same form and a Library
+editor draft survives opening/cancelling it. Isolated XMAC checks established all three contexts,
+duplicate-command protection, draft retention, successful creation and a real restart retaining it.
+Build target remains macOS 13.0 and Release arm64 + x86_64.
 Live UI checks use an isolated diagnostic app/library: system Chinese, manual English, restart
 persistence/native menus, draft retention, single keyboard focus, and no retained tile focus after
 opening a website. Temporary browser pages were closed. The normal user library was not used.
 
-XMAC user acceptance of this patch is still pending; the earlier user report is recorded above.
+The user explicitly accepted the replacement icon on 2026-10-30. Earlier XMAC validation was
+reported basically normal; final user acceptance of the other feedback and build 7 remains open.
 Intel macOS 13.6.9 and outstanding two-device/real-account acceptance remain required before release.
 See the PR's live checks and the artifact validation report for final build/package/CI results.

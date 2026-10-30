@@ -1,4 +1,4 @@
-# WebDock Test Plan — v0.3
+# WebDock Test Plan — v0.4.1
 
 ## Automated tests
 
@@ -226,3 +226,22 @@ confirmation with Cancel. The diagnostic app was closed after validation.
 The isolated XMAC UI run covered language switching/restart, draft preservation, single focus and
 click-launch → keyboard-navigation recovery; patch acceptance on the user's normal installation
 and Intel macOS 13.6.9 remain pending.
+
+## Build 7 acceptance closure
+
+45 automated tests pass. WebDAVHTTPIntegrationTests uses Network/NWListener bound only to
+127.0.0.1 on an ephemeral port and the production URLSession transport, with no URLProtocol stub.
+It checks two independent local stores, real conditional create/update, custom icon and tombstone
+transfer, stale ETag rejection and fresh merge, HTTP 503 / corrupt asset rejection before durable
+replacement, offline store restart/portable restore and Pre-Sync/Pre-Restore snapshots. It uses
+synthetic credentials and never reads/writes real WebDAV settings or Keychain. This does not close
+the two-real-Mac, production-server or real browser-account gates.
+
+Native XMAC build 7 checks: File > New Shortcut is visible; menu click / ⌘N work in Launcher,
+Library and Settings; repeated ⌘N retains the existing form text; cancel retains unsaved Library
+editor text; creating a synthetic record succeeds and persists after a real restart. The diagnostic
+app was closed afterwards. The previously accepted icon is unchanged.
+
+Run scripts/collect_device_acceptance.sh on each target Mac as described in DEVICE_ACCEPTANCE.md.
+The collector is read-only, refuses to overwrite prior evidence, and leaves interactive checkboxes
+unticked. An Apple Silicon report explicitly cannot count as native Intel Ventura acceptance.

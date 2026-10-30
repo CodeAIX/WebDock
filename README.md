@@ -40,6 +40,9 @@ Settings → General → Display Language offers Follow System (default), 简体
 App content changes immediately and draft edits are retained; restart WebDock to fully update
 macOS-owned menus and system dialogs. This preference belongs to each Mac and does not sync.
 Version 0.4.1 also includes the WebDock app icon and removes the overlapping Launcher focus frame.
+Build 7 adds the native File → New Shortcut / ⌘N command across Launcher, Library and Settings.
+The icon is accepted; remaining device acceptance and evidence collection are described in
+docs/DEVICE_ACCEPTANCE.md.
 
 ## Browser account access
 

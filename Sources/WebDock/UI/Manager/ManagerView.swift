@@ -11,12 +11,13 @@ struct ManagerView: View {
     @State private var editorHasChanges = false
     @State private var pendingSelection: UUID?
     @State private var showDiscardChanges = false
-    @State private var showNewShortcutSheet = false
+    @ObservedObject private var newShortcut: NewShortcutPresentation
     @State private var searchText = ""
     @State private var groupFilter: UUID?
 
-    init(environment: AppEnvironment) {
+    init(environment: AppEnvironment, newShortcut: NewShortcutPresentation) {
         self.environment = environment
+        self.newShortcut = newShortcut
         _navigation = ObservedObject(wrappedValue: environment.libraryNavigation)
         _dataStore = ObservedObject(wrappedValue: environment.dataStore)
     }
@@ -40,8 +41,8 @@ struct ManagerView: View {
             VStack(spacing: 10) {
                 HStack {
                     TextField(L10n.tr("Search library"), text: $searchText)
-                    Button { showNewShortcutSheet = true } label: { Image(systemName: "plus") }
-                        .keyboardShortcut("n").help(L10n.tr("New Shortcut"))
+                    Button { newShortcut.isPresented = true } label: { Image(systemName: "plus") }
+                        .help(L10n.tr("New Shortcut"))
                 }.padding(.horizontal, 12).padding(.top, 12)
                 Picker(L10n.tr("Group"), selection: $groupFilter) {
                     Text(L10n.tr("All Shortcuts")).tag(nil as UUID?)
@@ -85,7 +86,7 @@ struct ManagerView: View {
             }
             }
         }
-        .sheet(isPresented: $showNewShortcutSheet) {
+        .sheet(isPresented: $newShortcut.isPresented) {
             NewShortcutSheet(environment: environment) { shortcut in
                 requestSelection(shortcut.id)
             }

@@ -1,15 +1,16 @@
 # WebDock UI v0.4 implementation handoff — 2026-10-30
 
 Baseline: main 4d4dd96aa6cbe371c91bf0a5d12f604190bd2922. Working checkout is source/ under
-/Users/x/Agent/WebDock. Initial UI-5 build is 0.4.0 (4); the active XMAC feedback follow-up is 0.4.1 (6), macOS 13.0, arm64 + x86_64.
+/Users/x/Agent/WebDock. Initial UI-5 build is 0.4.0 (4); the active candidate is 0.4.1 (7), macOS 13.0, arm64 + x86_64.
 
 ## XMAC feedback follow-up — 2026-10-30
 
 The user reports XMAC validation is basically normal, with missing app branding, overlapping focus
 frames and a request for Chinese/English UI. Branch feat/v0.4.1-branding-localization addresses these
-in version 0.4.1 (6), stacked on UI-5. Build 6 replaces build 5's icon with the user's globe-and-Dock
+in version 0.4.1, stacked on UI-5. Build 6 replaces build 5's icon with the user's globe-and-Dock
 artwork and removes the white outer backing in the native XMAC About panel. A standalone ICNS is
-also available. See V041_XMAC_FEEDBACK.md. The patch awaits user revalidation;
+also available. The user explicitly accepted this icon on 2026-10-30. Build 7 completes the File
+New Shortcut / ⌘N command and transport acceptance preparation. See V041_XMAC_FEEDBACK.md;
 no new Intel or two-device acceptance is implied by the XMAC report.
 
 ## Review order
@@ -71,6 +72,14 @@ files can remain after an I/O failure. They are harmless and retained for recove
 - Full drag/drop/restart, deletion, density and VoiceOver acceptance on both target Macs.
 - Keyboard and system-default Return launch were checked on XMAC; Ventura still needs confirmation.
 - Final user visual acceptance. CI or an injected network test does not establish these behaviors.
+
+The application icon is accepted. New automatic evidence (build 7): 45 tests, including real TCP /
+URLSession WebDAV transfer between two isolated local stores, icon/tombstone transfer, ETag conflict
+rejection and fresh merge, HTTP/corrupt-payload failure preservation, offline restart/restore and
+safety snapshots. This is still one host and an in-process loopback server. XMAC native UI also
+verified the File command in Launcher/Library/Settings, repeated-command form retention, unsaved
+Library draft retention and successful new-record persistence after restart. DEVICE_ACCEPTANCE.md
+and scripts/collect_device_acceptance.sh provide the remaining native-device evidence workflow.
 
 The design's optional future navigation (Favorites/Recent), login/Dock/menu-presence controls and
 resizable sidebar are not added. Existing groups and a remembered 200pt sidebar cover this phase.

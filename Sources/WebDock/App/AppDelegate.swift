@@ -69,6 +69,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         managerWindowController?.showManager()
     }
 
+    func newShortcut() {
+        // Do not open another creation flow while a sheet or draft is already presented.
+        guard NSApp.keyWindow?.sheetParent == nil, NSApp.keyWindow?.attachedSheet == nil else { return }
+        if let manager = managerWindowController, NSApp.keyWindow === manager.window {
+            manager.presentNewShortcut()
+        } else {
+            openLauncher()
+            launcherPanelController?.presentNewShortcut()
+        }
+    }
+
     private func servicePendingLauncherShowOnNextRunLoop() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }

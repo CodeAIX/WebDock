@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// Each controller owns one presentation, shared by its button and the app's File command.
+final class NewShortcutPresentation: ObservableObject {
+    @Published var isPresented = false
+}
+
 struct NewShortcutSheet: View {
     @ObservedObject private var language = AppLanguage.shared
     private static let defaultBrowserToken = "__WEBDOCK_DEFAULT_BROWSER__"

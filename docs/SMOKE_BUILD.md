@@ -1,6 +1,8 @@
 # WebDock Smoke Build
 
 The `macOS Smoke Build` workflow produces `WebDock-smoke-macos.zip` for interactive testing on real Macs.
+The download also contains collect_device_acceptance.sh and DEVICE_ACCEPTANCE.md for read-only
+package/host evidence and the remaining native-device checklist.
 
 ## Build contract
 
