@@ -10,6 +10,9 @@ struct LauncherVisibilityState {
 
     private(set) var hasPendingShow = false
 
+    /// A global shortcut explicitly requests a show, even if the panel was already visible.
+    mutating func requestShow() { hasPendingShow = true }
+
     /// Dock reopen should never synchronously show a hidden launcher. Instead,
     /// queue a show request and let the app delegate service it on the next main
     /// run-loop turn once the application is actually active.

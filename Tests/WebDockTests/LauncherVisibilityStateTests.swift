@@ -2,6 +2,22 @@ import XCTest
 @testable import WebDock
 
 final class LauncherVisibilityStateTests: XCTestCase {
+    func testGlobalRequestWaitsForActivationAndSurvivesLateResign() {
+        var state = LauncherVisibilityState()
+        state.requestShow()
+        XCTAssertFalse(state.consumePendingShowIfActive(false))
+        XCTAssertEqual(state.handleDidResignActive(), .hide)
+        XCTAssertTrue(state.consumePendingShowIfActive(true))
+        XCTAssertFalse(state.consumePendingShowIfActive(true))
+    }
+
+    func testGlobalRequestShowsWhenAlreadyActiveRatherThanToggling() {
+        var state = LauncherVisibilityState()
+        state.requestShow()
+        XCTAssertTrue(state.consumePendingShowIfActive(true))
+        state.requestShow()
+        XCTAssertTrue(state.consumePendingShowIfActive(true))
+    }
     func testDockClickOnVisibleLauncherRequestsHide() {
         var state = LauncherVisibilityState()
 

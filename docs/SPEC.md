@@ -14,6 +14,21 @@ Each Mac resolves that intent into its own installed browser and local Chromium 
 
 Supported platform: macOS 13.0+ on arm64 and x86_64.
 
+### Global Launcher shortcut (0.5.1 candidate, build 10)
+
+- Default: Control–Option–W (⌃⌥W), enabled for ordinary installations while WebDock is running.
+- Opens and activates Launcher from another app; repeated presses keep Launcher visible.
+- An existing modal sheet/draft is brought forward instead of opening a competing flow.
+- General Settings provides enable/disable, focused key-combination recording and Restore Default.
+- Escape, leaving the recording view or switching applications cancels recording and restores the
+  old registration. Plain typing and Shift-only combinations are rejected.
+- System symbolic shortcuts and exclusive native hotkey registrations are checked; failed
+  replacement preserves the prior choice. Startup failure is nonfatal and offers retry.
+- Public Carbon RegisterEventHotKey is used, without accessibility/event-tap permission or a
+  global keyboard monitor. ⌘1/⌘2 remain app menu commands.
+- Chord and enablement are device-local UserDefaults, excluded from canonical records and sync.
+  Isolated diagnostic installations default to disabled to avoid competing with the normal app.
+
 ## 2. Creation and editing
 
 Primary creation surfaces:

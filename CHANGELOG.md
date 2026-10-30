@@ -2,6 +2,8 @@
 
 ## 0.5.1 — Unreleased
 
+- Global Launcher shortcut (default ⌃⌥W), configurable recording, enable/disable and reset in General Settings.
+- Local shortcut persistence, system/registered-hotkey conflict reporting and safe recording cancellation.
 - Clearer bookmark line icon for Launcher Library access.
 - Full padded Settings sidebar rows respond to mouse clicks.
 - Local ICNS customization of the running Dock/app-switcher icon, restart persistence and reset.

@@ -33,6 +33,12 @@ launchable. Use ⌘F to search, ⌘N to create, ⌘1 for Launcher, ⌘2 for Libr
 Right-click offers editing, duplication, icons, group movement and confirmed deletion. Keyboard
 focus supports directional navigation. Reorder from unfiltered All Shortcuts.
 
+The 0.5.1 candidate adds a global **⌃⌥W** (Control–Option–W) shortcut to open and focus Launcher
+while another application is in front. WebDock must be running. Settings → General → Global
+Shortcut lets you enable/disable, record another combination or restore the default. Include
+Control, Option or Command with a key; Escape cancels recording. Changes stay on this Mac and
+survive restart. Registration conflicts keep the previous shortcut and show a message.
+
 Library uses four editor cards with explicit Save Changes and separate local override save.
 Settings has six sidebar pages, theme, density, subtitle and badge preferences. Custom and automatic
 icons travel in backup/sync JSON; all devices editing icons should use v0.4 because v0.3 writers

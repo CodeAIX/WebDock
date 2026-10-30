@@ -261,3 +261,15 @@
 "The ICNS file must be no larger than 16 MB." = "The ICNS file must be no larger than 16 MB.";
 "After replacing an ad-hoc signed build, macOS may require authorization again. Quit extra copies, keep WebDock in Applications, and retry here." = "After replacing an ad-hoc signed build, macOS may require authorization again. Quit extra copies, keep WebDock in Applications, and retry here.";
 "Customizes the running Dock and app-switcher icon and persists after restart. Finder keeps the installed app icon. This choice is local and is not synchronized." = "Customizes the running Dock and app-switcher icon and persists after restart. Finder keeps the installed app icon. This choice is local and is not synchronized.";
+"Global Shortcut" = "Global Shortcut";
+"Enable global Launcher shortcut" = "Enable global Launcher shortcut";
+"Launcher shortcut" = "Launcher shortcut";
+"Record Shortcut…" = "Record Shortcut…";
+"Restore Default" = "Restore Default";
+"Retry Registration" = "Retry Registration";
+"Press shortcut…" = "Press shortcut…";
+"Include Control, Option, or Command with a key. Escape cancels recording." = "Include Control, Option, or Command with a key. Escape cancels recording.";
+"This shortcut is in use by macOS or another application. Choose a different combination." = "This shortcut is in use by macOS or another application. Choose a different combination.";
+"The global shortcut could not be registered (error %d). Try another combination." = "The global shortcut could not be registered (error %d). Try another combination.";
+"Press a key combination. Escape cancels; switching away cancels recording." = "Press a key combination. Escape cancels; switching away cancels recording.";
+"Open Launcher from any application while WebDock is running. This shortcut is saved only on this Mac." = "Open Launcher from any application while WebDock is running. This shortcut is saved only on this Mac.";

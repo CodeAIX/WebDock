@@ -106,6 +106,7 @@ struct SettingsView: View {
         switch selectedPage {
         case .general:
             Section(L10n.tr("Language")) { LanguageSettingsView() }
+            Section(L10n.tr("Global Shortcut")) { GlobalHotKeySettingsView(service: environment.globalHotKey) }
             Section(L10n.tr("Launcher")) {
                 Toggle(L10n.tr("Show Launcher sidebar"), isOn: $sidebarVisible)
                 Text(L10n.tr("Click the Dock icon to open or hide Launcher. Use ⌘1 for Launcher and ⌘2 for Library."))

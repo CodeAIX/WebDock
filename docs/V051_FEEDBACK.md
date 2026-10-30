@@ -1,7 +1,33 @@
-# 0.5.1 (9) feedback candidate — 2026-10-30
+# 0.5.1 (10) feedback and global-shortcut candidate — 2026-10-30
 
 Base release: v0.5.0 / f227d8f. Branch: feat/v0.5.1-ui-icon-permissions. This is an unreleased
 candidate for the user's four follow-up points; the v0.5.0 release and tag are unchanged.
+
+## Global Launcher shortcut
+
+Build 10 adds the requested global Launcher shortcut, default ⌃⌥W. General Settings supports
+recording, enable/disable and restoring the default. The combination and enablement survive
+restart in this Mac's UserDefaults and are excluded from canonical/portable/sync data.
+
+The public Carbon event-hotkey API registers exclusively; enabled system symbolic shortcuts
+are also checked. Failed replacements preserve the prior choice/registration. Recording
+temporarily releases WebDock's own hotkey so the same chord can be captured, then restores on
+cancel or rejection. Startup registration failure is nonfatal and offers retry. This detects
+conflicts reported by the OS/native registration API, not every possible third-party event tap.
+No global keyboard monitor, accessibility grant or Input Monitoring grant is requested.
+
+Activation reuses the deferred Launcher visibility state machine: a global request waits for
+the app to become active and survives a late resign notification. Existing sheets are raised
+instead of covered by a new Launcher flow. The existing ⌘1/⌘2 menu commands and Dock toggle remain.
+Diagnostic copies default to disabled to avoid competing with a normal running installation.
+
+Automated coverage adds preference/restart and disabled state, conflict preservation, recording
+cancel/rejection rollback, stale callback suppression, corrupt preference fallback, startup retry,
+real exclusive native registration/release and global activation ordering. App-targeted UI key
+injection did record ⌃⌥J but did not exercise the system's global dispatch; true background
+activation is awaiting a physical-keyboard check and must not be claimed from registration alone.
+
+## Previous feedback changes
 
 1. Launcher Library action uses SF Symbols bookmark instead of rectangle.grid.1x2. Its action,
    tooltip, keyboard shortcut and accessibility label retain the existing Library semantics.
@@ -47,7 +73,7 @@ Primary references:
 
 ## Validation boundary
 
-50 tests cover existing behavior, ICNS persistence/restart/reset, invalid-file and storage-failure
+The build 9 baseline's 50 tests cover existing behavior, ICNS persistence/restart/reset, invalid-file and storage-failure
 preservation, exclusion from portable backups, missing metadata and real temporary directory read
 denial. Isolated XMAC checks established bookmark rendering, blank Settings-row clicks, actual
 ICNS selection through the native picker, preview/reset state, persistence across a real quit and

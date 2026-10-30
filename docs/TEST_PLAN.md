@@ -2,6 +2,16 @@
 
 ## 0.5.1 feedback candidate
 
+- Global shortcut: from another app, ⌃⌥W opens/activates Launcher; a second press keeps it open.
+- General Settings records a custom combination; old chord no longer summons, new chord does;
+  quit/restart retains it. Disabled state survives restart and Restore Default returns ⌃⌥W.
+- Plain/Shift-only input is rejected; Escape, view disappearance and app switch cancel recording.
+- A reported system/native registration conflict leaves the old choice working, with clear error.
+- Existing shortcut creation/picker sheets come forward without a second draft.
+- Automated tests cover persistence/disabled restart, conflict rollback, recording suspension and
+  cancellation, stale callback rejection, startup retry, corrupt preference fallback, exclusive
+  native registration/release and deferred activation event ordering. Real keyboard acceptance
+  remains distinct from app-targeted synthetic key events.
 - Verify Launcher uses a bookmark line icon for Library, retaining the tooltip/action.
 - Click Settings rows on their right blank padding, icon and label; each selects the same page.
 - Appearance → Choose ICNS: valid file previews and changes the running Dock/app-switcher icon;
