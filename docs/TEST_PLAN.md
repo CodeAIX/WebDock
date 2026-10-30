@@ -1,5 +1,19 @@
 # WebDock Test Plan — v0.4.1
 
+## 0.5.1 feedback candidate
+
+- Verify Launcher uses a bookmark line icon for Library, retaining the tooltip/action.
+- Click Settings rows on their right blank padding, icon and label; each selects the same page.
+- Appearance → Choose ICNS: valid file previews and changes the running Dock/app-switcher icon;
+  restart retains it; Restore Default Icon returns the bundled default. Cancel preserves selection.
+- Finder's installed bundle icon stays default. Strict codesign verification and designated
+  requirement must remain unchanged before/after selection, restart and reset.
+- Invalid/oversized ICNS and storage failures cannot replace a prior saved choice or runtime icon.
+- App icon data is device-local and absent from portable backups and sync payloads.
+- Browser metadata genuinely missing means empty profiles; directory read denial must raise an
+  error/access-required status instead of zero-account success. Never reset TCC during automation.
+- Recheck native Intel UI for this new candidate; the user's 0.5.0 pass is recorded separately.
+
 ## Automated tests
 
 ### Canonical model / creation

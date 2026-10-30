@@ -1,6 +1,6 @@
 # WebDock Product Specification — Portable Backup & Sync Architecture
 
-Status: active for v0.4.1; real-device acceptance is tracked separately.
+Status: released v0.5.0 with explicitly marked v0.5.1 candidate additions; real-device acceptance is tracked separately.
 
 ## 1. Product
 
@@ -192,6 +192,13 @@ Settings:
 - two Macs may resolve the same email to different Profile N directories;
 - real acceptance includes Intel macOS 13.6.9 and a current Apple Silicon Mac;
 - CI + universal Release smoke build pass before merge.
+
+## Device-local application icon (0.5.1 candidate)
+
+Appearance can import an ICNS for the running Dock/app-switcher icon and restore the default.
+The copy is stored under Appearance/CustomAppIcon.icns on this Mac and reapplied after restart;
+it is excluded from canonical records, portable backup and sync. Finder keeps the installed app
+icon. Do not rewrite signed app resources or attach Finder custom-icon metadata to the bundle.
 
 ## UI-3 website icons
 

@@ -22,7 +22,7 @@
 "Authorize / Rescan" = "Authorize / Rescan";
 "Automatic Icon" = "Automatic Icon";
 "Automatic from synced rule" = "Automatic from synced rule";
-"Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom icons and account emails are included in portable backups and your selected sync destination." = "Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom icons and account emails are included in portable backups and your selected sync destination.";
+"Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom website icons and account emails are included in portable backups and your selected sync destination." = "Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom website icons and account emails are included in portable backups and your selected sync destination.";
 "Back Up Now" = "Back Up Now";
 "Backup & Restore" = "Backup & Restore";
 "Backup created: %@" = "Backup created: %@";
@@ -254,3 +254,10 @@
 "macOS could not open the shortcut." = "macOS could not open the shortcut.";
 "WebDock Settings" = "WebDock Settings";
 "Language" = "Language";
+"Application icon" = "Application icon";
+"Choose ICNS…" = "Choose ICNS…";
+"Restore Default Icon" = "Restore Default Icon";
+"Choose a valid ICNS application icon." = "Choose a valid ICNS application icon.";
+"The ICNS file must be no larger than 16 MB." = "The ICNS file must be no larger than 16 MB.";
+"After replacing an ad-hoc signed build, macOS may require authorization again. Quit extra copies, keep WebDock in Applications, and retry here." = "After replacing an ad-hoc signed build, macOS may require authorization again. Quit extra copies, keep WebDock in Applications, and retry here.";
+"Customizes the running Dock and app-switcher icon and persists after restart. Finder keeps the installed app icon. This choice is local and is not synchronized." = "Customizes the running Dock and app-switcher icon and persists after restart. Finder keeps the installed app icon. This choice is local and is not synchronized.";

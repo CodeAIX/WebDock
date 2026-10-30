@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !isTestHost else { return }
         do {
             try bootstrapIfNeeded()
+            environment?.appIconService.applySavedIcon()
             if environment?.isValidation != true {
                 try environment?.backupService.performAutomaticBackupIfNeeded()
                 environment?.syncCoordinator.start()

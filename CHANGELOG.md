@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 — Unreleased
+
+- Clearer bookmark line icon for Launcher Library access.
+- Full padded Settings sidebar rows respond to mouse clicks.
+- Local ICNS customization of the running Dock/app-switcher icon, restart persistence and reset.
+- Direct profile-metadata read preserves permission failures instead of misreporting no accounts.
+- Explain ad-hoc update permission identity limits; no automatic system permission resets.
+
 ## 0.5.0 — 2026-10-30
 
 - Native Launcher with fixed search/actions, group sidebar and keyboard navigation.

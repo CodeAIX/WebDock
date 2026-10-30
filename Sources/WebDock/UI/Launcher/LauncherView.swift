@@ -192,7 +192,7 @@ struct LauncherView: View {
             Button { newShortcut.isPresented = true } label: { Image(systemName: "plus") }
                 .help(L10n.tr("New shortcut (⌘N)"))
                 .accessibilityLabel(L10n.tr("New shortcut"))
-            Button(action: onOpenManager) { Image(systemName: "rectangle.grid.1x2") }
+            Button(action: onOpenManager) { Image(systemName: "bookmark") }
                 .help(L10n.tr("Manage shortcuts (⌘2)"))
                 .accessibilityLabel(L10n.tr("Manage shortcuts"))
             settingsButton

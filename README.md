@@ -50,6 +50,10 @@ device scenarios are documented in docs/DEVICE_ACCEPTANCE.md.
 
 ## Browser account access
 
+The 0.5.1 candidate adds full Settings row hit targets, a bookmark Library icon and local ICNS
+customization of the running Dock/app-switcher icon. Finder keeps the installed icon so signed
+bundle metadata remains untouched. See docs/V051_FEEDBACK.md for scope and validation status.
+
 On newer macOS versions, the OS may require explicit Files & Folders permission before WebDock can read another browser's profile metadata. WebDock provides first-run guidance, per-browser Authorize/Rescan controls, and a shortcut to Privacy & Security. The system remains the authority that grants or revokes access.
 
 WebDock reads only profile metadata needed to identify account names/emails and local profile directories. It does not read browser cookies, saved passwords, browsing history, tokens, or browser page content. Automatic icon discovery separately requests public website icon metadata without browser credentials.

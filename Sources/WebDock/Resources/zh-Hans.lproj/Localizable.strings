@@ -22,7 +22,7 @@
 "Authorize / Rescan" = "授权 / 重新扫描";
 "Automatic Icon" = "自动图标";
 "Automatic from synced rule" = "自动遵循同步规则";
-"Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom icons and account emails are included in portable backups and your selected sync destination." = "自动图标功能使用独立会话请求网站公开的图标信息，不携带浏览器 Cookie 或凭据。自定义图标和账号邮箱会包含在便携备份及你选择的同步位置中。";
+"Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom website icons and account emails are included in portable backups and your selected sync destination." = "自动图标功能使用独立会话请求网站公开的图标信息，不携带浏览器 Cookie 或凭据。网站自定义图标和账号邮箱会包含在便携备份及你选择的同步位置中。";
 "Back Up Now" = "立即备份";
 "Backup & Restore" = "备份与恢复";
 "Backup created: %@" = "备份已创建：%@";
@@ -254,3 +254,10 @@
 "macOS could not open the shortcut." = "macOS 无法打开此快捷方式。";
 "WebDock Settings" = "WebDock 设置";
 "Language" = "语言";
+"Application icon" = "应用图标";
+"Choose ICNS…" = "选择 ICNS 图标…";
+"Restore Default Icon" = "恢复默认图标";
+"Choose a valid ICNS application icon." = "请选择有效的 ICNS 应用图标。";
+"The ICNS file must be no larger than 16 MB." = "ICNS 文件不能超过 16 MB。";
+"After replacing an ad-hoc signed build, macOS may require authorization again. Quit extra copies, keep WebDock in Applications, and retry here." = "替换 ad-hoc 签名版本后，macOS 可能要求重新授权。请退出其他副本，将 WebDock 保持在 Applications 中，然后在此重试。";
+"Customizes the running Dock and app-switcher icon and persists after restart. Finder keeps the installed app icon. This choice is local and is not synchronized." = "自定义运行中的程序坞与应用切换器图标，重启后仍保留。Finder 保持安装包图标。此选择仅存本机，不参与同步。";

@@ -73,11 +73,18 @@ struct BrowserProfileDiscovery {
             .appendingPathComponent(relativePath, isDirectory: true)
         let localStateURL = userDataDirectory.appendingPathComponent("Local State", isDirectory: false)
 
-        guard fileManager.fileExists(atPath: localStateURL.path) else {
-            return []
+        // Attempt the read so macOS can request access. A preflight existence check may
+        // return false for a protected directory and incorrectly report an empty account list.
+        let data: Data
+        do { data = try Data(contentsOf: localStateURL) }
+        catch {
+            let error = error as NSError
+            if error.domain == NSCocoaErrorDomain,
+               error.code == NSFileReadNoSuchFileError || error.code == NSFileNoSuchFileError {
+                return []
+            }
+            throw error
         }
-
-        let data = try Data(contentsOf: localStateURL)
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let profile = root["profile"] as? [String: Any],
               let infoCache = profile["info_cache"] as? [String: Any] else {

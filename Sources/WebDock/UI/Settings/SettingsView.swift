@@ -42,6 +42,7 @@ struct SettingsView: View {
                     Button { selectedPage = page; statusMessage = nil } label: {
                         Label(L10n.tr(page.rawValue), systemImage: page.symbol)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(9)
+                            .contentShape(Rectangle())
                             .background(selectedPage == page ? Color.accentColor.opacity(0.16) : .clear,
                                         in: RoundedRectangle(cornerRadius: 8))
                     }.buttonStyle(.plain)
@@ -144,6 +145,9 @@ struct SettingsView: View {
                 Text(L10n.tr("macOS owns the Files & Folders permission. WebDock can trigger the access request but cannot enable the system switch for you."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text(L10n.tr("After replacing an ad-hoc signed build, macOS may require authorization again. Quit extra copies, keep WebDock in Applications, and retry here."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section(L10n.tr("Device Resolution")) {
                 Text(L10n.tr("Chromium accounts are matched between Macs by signed-in account email, never by local Profile numbers."))
@@ -232,12 +236,13 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         case .appearance:
+            Section(L10n.tr("Application icon")) { AppIconSettingsView(service: environment.appIconService) }
             AppearanceSettingsView()
         case .privacy:
             Section(L10n.tr("Privacy")) {
                 Text(L10n.tr("WebDock reads only browser profile metadata needed to match account names and emails. It does not read cookies, passwords, browsing history, or saved browser credentials."))
                     .foregroundStyle(.secondary)
-                Text(L10n.tr("Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom icons and account emails are included in portable backups and your selected sync destination."))
+                Text(L10n.tr("Automatic website icons request public icon metadata from each website using a separate session without browser cookies or credentials. Custom website icons and account emails are included in portable backups and your selected sync destination."))
                     .foregroundStyle(.secondary)
                 Text(L10n.tr("WebDAV passwords live in macOS Keychain."))
                     .foregroundStyle(.secondary)

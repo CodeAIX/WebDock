@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import WebDock
 
 final class BrowserProfileDiscoveryTests: XCTestCase {
@@ -83,5 +84,29 @@ final class BrowserProfileDiscoveryTests: XCTestCase {
             displayName: "Safari"
         )
         XCTAssertTrue(try discovery.discoverProfiles(for: safari).isEmpty)
+    }
+
+    func testMissingLocalStateIsAnEmptyLibrary() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let browser = BrowserOption(bundleIdentifier: "com.google.Chrome", displayName: "Chrome",
+            chromiumUserDataRelativePath: "Google/Chrome", profileRoutingSupport: .verifiedChromiumWebloc)
+        XCTAssertTrue(try BrowserProfileDiscovery(homeDirectory: home).discoverProfiles(for: browser).isEmpty)
+    }
+
+    func testUnreadableDirectoryThrowsInsteadOfReportingZeroAccounts() throws {
+        guard geteuid() != 0 else { throw XCTSkip("Filesystem permission checks require a non-root test user") }
+        let manager = FileManager.default
+        let home = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let dataRoot = home.appendingPathComponent("Library/Application Support/Google/Chrome")
+        try manager.createDirectory(at: dataRoot, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: dataRoot.appendingPathComponent("Local State"))
+        defer {
+            try? manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dataRoot.path)
+            try? manager.removeItem(at: home)
+        }
+        try manager.setAttributes([.posixPermissions: 0], ofItemAtPath: dataRoot.path)
+        let browser = BrowserOption(bundleIdentifier: "com.google.Chrome", displayName: "Chrome",
+            chromiumUserDataRelativePath: "Google/Chrome", profileRoutingSupport: .verifiedChromiumWebloc)
+        XCTAssertThrowsError(try BrowserProfileDiscovery(homeDirectory: home).discoverProfiles(for: browser))
     }
 }
